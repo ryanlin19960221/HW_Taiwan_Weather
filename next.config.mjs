@@ -5,13 +5,13 @@ const isGhPages = !isVercel && (isGitHubActions || process.env.DEPLOY_TARGET ===
 const repo = "HW_Taiwan_Weather";
 
 const nextConfig = {
-  output: "export",
+  output: isGhPages ? "export" : undefined,
   basePath: isGhPages ? `/${repo}` : "",
   assetPrefix: isGhPages ? `/${repo}/` : undefined,
   images: {
     unoptimized: true,
   },
-  trailingSlash: true,
+  trailingSlash: isGhPages,
   reactStrictMode: true,
 };
 
