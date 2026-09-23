@@ -3,7 +3,7 @@
 
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { sql, ensureSchema } from "./db";
+import { sql, ensureSchema, isDbConfigured } from "./db";
 import { fetchLatestGfsWind, validTime, type GfsWindGrid } from "./gfs-wind";
 
 const TTL_SECONDS = Number(process.env.GFS_WIND_CACHE_TTL_SECONDS ?? 3 * 3600);
@@ -24,6 +24,7 @@ function isFresh(entry: GfsWindGrid): boolean {
 }
 
 async function readDb(): Promise<GfsWindGrid | null> {
+  if (!isDbConfigured()) return null;
   try {
     await ensureSchema();
     const { rows } = await sql<{ payload: GfsWindGrid | string }>`
@@ -39,6 +40,7 @@ async function readDb(): Promise<GfsWindGrid | null> {
 }
 
 async function writeDb(entry: GfsWindGrid): Promise<void> {
+  if (!isDbConfigured()) return;
   try {
     await ensureSchema();
     await sql`
