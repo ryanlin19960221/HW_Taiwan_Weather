@@ -4,7 +4,7 @@
 > 本專案純手刻實作氣象資料管線、逐像素 IDW 空間內插填色場、NOAA GFS 粒子風場 Canvas 動畫、雷達回波回放與颱風動態軌跡。
 > 專案監修：林丞斌
 > 
-> 🌐 **GitHub Pages 線上展示**：[https://ryanlin19960221.github.io/HW_Taiwan_Weather/](https://ryanlin19960221.github.io/HW_Taiwan_Weather/)
+> 🌐 **線上展示網址**：[https://hw-taiwan-weather.vercel.app](https://hw-taiwan-weather.vercel.app)
 
 ![主要功能展示](docs/screenshot.png)
 
@@ -53,10 +53,13 @@ npm run dev
 
 開啟瀏覽器前往 [http://localhost:3000](http://localhost:3000) 即可瀏覽！
 
-### 4. GitHub Pages 自動建置與部署
+### 4. 線上伺服器與部署
 
-專案已配置 `.github/workflows/deploy.yml`。每次推送到 `main` 分支時，GitHub Actions 會自動執行靜態導出（`npm run build`）並發布至 GitHub Pages：
-👉 **線上伺服器網址**：[https://ryanlin19960221.github.io/HW_Taiwan_Weather/](https://ryanlin19960221.github.io/HW_Taiwan_Weather/)
+專案支援 Vercel 與 GitHub Pages 雙平台無縫部署：
+- 🚀 **主要展示網址 (Vercel)**：[https://hw-taiwan-weather.vercel.app](https://hw-taiwan-weather.vercel.app)
+- 🌐 **備用展示網址 (GitHub Pages)**：[https://ryanlin19960221.github.io/HW_Taiwan_Weather/](https://ryanlin19960221.github.io/HW_Taiwan_Weather/)
+
+每次推送到 `main` 分支時，GitHub Actions 與 Vercel 均會自動進行建置與同步更新！
 
 ---
 

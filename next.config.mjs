@@ -1,11 +1,13 @@
 /** @type {import('next').NextConfig} */
-const isProd = process.env.NODE_ENV === "production";
+const isVercel = Boolean(process.env.VERCEL);
+const isGitHubActions = process.env.GITHUB_ACTIONS === "true";
+const isGhPages = !isVercel && (isGitHubActions || process.env.DEPLOY_TARGET === "gh-pages");
 const repo = "HW_Taiwan_Weather";
 
 const nextConfig = {
   output: "export",
-  basePath: isProd ? `/${repo}` : "",
-  assetPrefix: isProd ? `/${repo}/` : "",
+  basePath: isGhPages ? `/${repo}` : "",
+  assetPrefix: isGhPages ? `/${repo}/` : undefined,
   images: {
     unoptimized: true,
   },
