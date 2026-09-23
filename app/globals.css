@@ -42,6 +42,77 @@ body {
               inset 0 1px 0 0 rgba(255, 255, 255, 0.2);
 }
 
+/* ========================================================
+   JOJO 的奇妙冒險 (JOJO BIZARRE ADVENTURE) 狂氣風格樣式
+   ======================================================== */
+.jojo-panel {
+  background: linear-gradient(135deg, rgba(28, 14, 48, 0.92) 0%, rgba(13, 8, 25, 0.96) 100%) !important;
+  border: 2px solid #eab308 !important;
+  box-shadow: 4px 4px 0px #7e22ce, 0 10px 30px rgba(126, 34, 206, 0.4) !important;
+}
+
+.jojo-btn {
+  position: relative;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 2px solid #ca8a04;
+  background: linear-gradient(135deg, #3b0764 0%, #1e1035 100%);
+  box-shadow: 3px 3px 0px #a855f7;
+  color: #fef08a;
+  text-shadow: 1px 1px 0px #000;
+}
+.jojo-btn:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 5px 5px 0px #d946ef, 0 0 15px rgba(234, 179, 8, 0.6);
+  border-color: #fde047;
+  color: #ffffff;
+}
+.jojo-btn:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0px #a855f7;
+}
+
+.jojo-btn-active {
+  background: linear-gradient(135deg, #eab308 0%, #ca8a04 100%) !important;
+  color: #1e1035 !important;
+  border-color: #fef08a !important;
+  box-shadow: 3px 3px 0px #d946ef, 0 0 20px rgba(234, 179, 8, 0.7) !important;
+  text-shadow: none !important;
+  font-weight: 900 !important;
+}
+
+.jojo-action-btn {
+  background: linear-gradient(135deg, #9333ea 0%, #7e22ce 50%, #4c1d95 100%);
+  border: 2px solid #facc15;
+  box-shadow: 4px 4px 0px #facc15, 0 0 20px rgba(168, 85, 247, 0.5);
+  color: #ffffff;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  transition: all 0.15s ease-in-out;
+}
+.jojo-action-btn:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0px #facc15, 0 0 25px rgba(250, 204, 21, 0.8);
+  filter: brightness(1.1);
+}
+.jojo-action-btn:active {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0px #facc15;
+}
+
+.jojo-menace {
+  font-weight: 900;
+  color: #d946ef;
+  text-shadow: 0 0 10px rgba(217, 70, 239, 0.8), 2px 2px 0 #000;
+  animation: jojo-wobble 2s infinite ease-in-out;
+}
+
+@keyframes jojo-wobble {
+  0%, 100% { transform: rotate(-3deg) scale(1); }
+  50% { transform: rotate(3deg) scale(1.05); }
+}
+
 /* Leaflet 地圖容器 */
 .leaflet-container {
   height: 100%;

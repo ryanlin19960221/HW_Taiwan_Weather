@@ -135,9 +135,9 @@ export default function WarningBanner() {
         </div>
 
         {hasWarnings && (
-          <button className="flex items-center gap-1 rounded-lg bg-white/10 px-2 py-1 text-[11px] font-medium text-slate-300 hover:bg-white/20 transition">
-            <span>{open ? "收合" : "查看詳情"}</span>
-            <span className="text-[9px]">{open ? "▲" : "▼"}</span>
+          <button className="jojo-btn flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-black tracking-wide text-amber-300">
+            <span>{open ? "收合 (CLOSE)" : "替身警報！查看詳情"}</span>
+            <span className="text-[10px] font-mono">{open ? "▲" : "▼"}</span>
           </button>
         )}
       </div>

@@ -25,8 +25,6 @@ interface Props {
   onRefresh: () => void;
 }
 
-// 手機版控制層：桌機（md 以上）完全不顯示，改由 page.tsx 的原四角面板負責。
-// 設計原則：地圖優先，控制項收進底部列與可召喚的 bottom sheet。
 export default function MobileControls({
   meta,
   mode,
@@ -56,9 +54,9 @@ export default function MobileControls({
         <div className="pointer-events-auto flex items-center justify-between gap-2">
           <button
             onClick={onRefresh}
-            className="rounded-full bg-panel px-3 py-1.5 text-[11px] text-gray-200 shadow-lg backdrop-blur"
+            className="jojo-btn rounded-xl px-3 py-1.5 text-[11px] font-black"
           >
-            ↻{" "}
+            ⚡ 替身同步{" "}
             {new Date(meta.updatedAt).toLocaleTimeString("zh-TW", {
               hour: "2-digit",
               minute: "2-digit",
@@ -67,124 +65,120 @@ export default function MobileControls({
           </button>
           <div className="flex items-center gap-2">
             <SquareBtn label="摘要" onClick={() => setSheet("summary")}>
-              ℹ️
+              ★ 摘要
             </SquareBtn>
             <SquareBtn label="設定" onClick={() => setSheet("settings")}>
-              ⚙️
+              ⚙️ 替身
             </SquareBtn>
           </div>
         </div>
 
-        {/* 色階條（常駐，跟著目前圖層變化） */}
+        {/* 色階條 */}
         <div className="pointer-events-auto flex justify-center">
           <WeatherLegend mode={mode} />
         </div>
 
         {/* 圖層切換：橫向可滑 pills */}
-        <div className="pointer-events-auto flex gap-2 overflow-x-auto rounded-xl bg-panel p-1.5 shadow-lg backdrop-blur [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {MODES.map((m) => (
-            <button
-              key={m.key}
-              onClick={() => onModeChange(m.key)}
-              className={`flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-sm transition ${
-                mode === m.key
-                  ? "bg-sky-500/90 text-white"
-                  : "bg-white/5 text-gray-200"
-              }`}
-            >
-              <span>{m.icon}</span>
-              <span className="whitespace-nowrap">{m.label}</span>
-            </button>
-          ))}
+        <div className="pointer-events-auto flex gap-2 overflow-x-auto rounded-2xl jojo-panel p-2 shadow-2xl [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {MODES.map((m) => {
+            const active = mode === m.key;
+            return (
+              <button
+                key={m.key}
+                onClick={() => onModeChange(m.key)}
+                className={`flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-black transition ${
+                  active ? "jojo-btn jojo-btn-active" : "jojo-btn"
+                }`}
+              >
+                <span>{m.icon}</span>
+                <span className="whitespace-nowrap">{m.label}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {/* 摘要 sheet */}
+      {/* 摘要 Bottom Sheet */}
       {sheet === "summary" && (
         <Backdrop onClose={close}>
-          <div
-            className="relative mb-4"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <WeatherSummaryPanel meta={meta} />
+          <div className="relative max-h-[85vh] overflow-y-auto p-4">
             <CloseX onClick={close} />
+            <WeatherSummaryPanel meta={meta} />
           </div>
         </Backdrop>
       )}
 
-      {/* 設定 sheet：底圖、圖層開關、定位 */}
+      {/* 設定 Bottom Sheet */}
       {sheet === "settings" && (
         <Backdrop onClose={close}>
-          <div
-            className="relative w-full max-w-md rounded-t-2xl bg-panel p-4 pb-8 shadow-2xl backdrop-blur"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-white/20" />
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-white">地圖設定</h2>
-              <button
-                onClick={close}
-                className="rounded-md bg-white/10 px-2.5 py-1 text-xs text-gray-200"
-              >
-                關閉
-              </button>
+          <div className="relative w-[min(94vw,380px)] rounded-2xl jojo-panel p-5 text-white shadow-2xl">
+            <CloseX onClick={close} />
+            <div className="mb-3 flex items-center justify-between border-b-2 border-amber-400/40 pb-2">
+              <span className="font-black italic text-amber-300">
+                ★ 替身領域設定
+              </span>
+              <span className="jojo-menace text-xs">ゴゴゴ</span>
             </div>
 
-            <ToggleRow
-              checked={showCounties}
-              onChange={onToggleCounties}
-              label="縣市界線"
-            />
-            {mode === "wind" && (
+            <div className="space-y-2">
               <ToggleRow
-                checked={showWindStations}
-                onChange={onToggleWindStations}
-                label="風場測站箭頭"
+                checked={showCounties}
+                onChange={onToggleCounties}
+                label="★ 縣市行政領域界線"
               />
-            )}
-            {mode === "temperature" && (
-              <ToggleRow
-                checked={showTempLabels}
-                onChange={onToggleTempLabels}
-                label="氣溫數字標籤"
-              />
-            )}
+              {mode === "temperature" && (
+                <ToggleRow
+                  checked={showTempLabels}
+                  onChange={onToggleTempLabels}
+                  label="★ 氣溫數值標籤"
+                />
+              )}
+              {mode === "wind" && (
+                <ToggleRow
+                  checked={showWindStations}
+                  onChange={onToggleWindStations}
+                  label="★ 風場向量箭頭"
+                />
+              )}
+            </div>
 
-            <div className="mt-3 border-t border-white/10 pt-3">
-              <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400">
-                底圖
+            <div className="mt-4 border-t-2 border-amber-400/30 pt-3">
+              <div className="mb-2 text-xs font-black text-amber-300">
+                世界底圖
               </div>
               <div className="grid grid-cols-2 gap-2">
-                {(
-                  [
-                    { key: "dark", label: "深色" },
-                    { key: "osm", label: "街道圖" },
-                  ] as const
-                ).map((b) => (
-                  <button
-                    key={b.key}
-                    onClick={() => onBasemapChange(b.key)}
-                    className={`rounded-md px-3 py-2 text-sm transition ${
-                      basemap === b.key
-                        ? "bg-sky-500/90 text-white"
-                        : "bg-white/5 text-gray-200"
-                    }`}
-                  >
-                    {b.label}
-                  </button>
-                ))}
+                <button
+                  onClick={() => onBasemapChange("dark")}
+                  className={`rounded-xl py-2 text-xs font-black transition-all ${
+                    basemap === "dark"
+                      ? "bg-amber-400 text-purple-950 shadow-[2px_2px_0px_#9333ea]"
+                      : "bg-purple-950 border border-purple-700 text-slate-300"
+                  }`}
+                >
+                  🌑 黑暗空間
+                </button>
+                <button
+                  onClick={() => onBasemapChange("osm")}
+                  className={`rounded-xl py-2 text-xs font-black transition-all ${
+                    basemap === "osm"
+                      ? "bg-amber-400 text-purple-950 shadow-[2px_2px_0px_#9333ea]"
+                      : "bg-purple-950 border border-purple-700 text-slate-300"
+                  }`}
+                >
+                  🏙️ 杜王町街景
+                </button>
               </div>
             </div>
 
             <button
               onClick={onLocate}
               disabled={locating}
-              className="mt-4 flex w-full items-center justify-center gap-2 rounded-md bg-emerald-600/90 px-3 py-2.5 text-sm text-white transition disabled:opacity-60"
+              className="jojo-action-btn mt-4 flex w-full items-center justify-center gap-2 rounded-xl py-3 text-xs font-black shadow-lg disabled:opacity-60"
             >
-              {locating ? "定位中…" : "📌 定位我的位置"}
+              <span>{locating ? "替身搜尋中…" : "🧭 替身感知！定位我的座標"}</span>
             </button>
             {locateMsg && !userLocation && (
-              <div className="mt-2 rounded-md bg-amber-500/20 px-3 py-2 text-xs text-amber-200">
+              <div className="mt-2 rounded-xl bg-amber-500/20 border border-amber-400/40 p-2 text-xs text-amber-200">
                 {locateMsg}
               </div>
             )}
@@ -208,7 +202,7 @@ function SquareBtn({
     <button
       onClick={onClick}
       aria-label={label}
-      className="flex h-10 w-10 items-center justify-center rounded-full bg-panel text-lg shadow-lg backdrop-blur"
+      className="jojo-btn flex h-9 items-center justify-center rounded-xl px-2.5 text-xs font-black shadow-lg"
     >
       {children}
     </button>
@@ -225,19 +219,27 @@ function ToggleRow({
   label: string;
 }) {
   return (
-    <label className="mt-2 flex cursor-pointer items-center gap-2 rounded-md bg-white/5 px-3 py-2.5 text-sm text-gray-200">
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-        className="h-4 w-4 accent-sky-500"
-      />
-      {label}
-    </label>
+    <button
+      type="button"
+      onClick={() => onChange(!checked)}
+      className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-xs font-black transition-all ${
+        checked
+          ? "bg-purple-900/80 border-2 border-amber-400 text-amber-300 shadow-[2px_2px_0px_#facc15]"
+          : "bg-slate-900/70 border border-slate-700 text-slate-400"
+      }`}
+    >
+      <span>{label}</span>
+      <span
+        className={`rounded px-1.5 py-0.5 text-[10px] font-mono font-bold ${
+          checked ? "bg-amber-400 text-purple-950" : "bg-slate-800 text-slate-400"
+        }`}
+      >
+        {checked ? "STAND ON" : "OFF"}
+      </span>
+    </button>
   );
 }
 
-// 底部對齊的半透明遮罩，點擊空白處關閉。
 function Backdrop({
   children,
   onClose,
@@ -250,8 +252,13 @@ function Backdrop({
       className="fixed inset-0 z-[1100] flex items-end justify-center"
       onClick={onClose}
     >
-      <div className="absolute inset-0 bg-black/50" />
-      <div className="relative w-full flex justify-center">{children}</div>
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+      <div
+        className="relative w-full flex justify-center pb-8"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {children}
+      </div>
     </div>
   );
 }
@@ -261,7 +268,7 @@ function CloseX({ onClick }: { onClick: () => void }) {
     <button
       onClick={onClick}
       aria-label="關閉"
-      className="absolute -top-3 -right-3 flex h-8 w-8 items-center justify-center rounded-full bg-white/15 text-gray-100 shadow-lg backdrop-blur"
+      className="absolute -top-3 -right-3 flex h-8 w-8 items-center justify-center rounded-full bg-purple-900 border-2 border-amber-400 text-amber-300 shadow-lg font-black text-sm"
     >
       ✕
     </button>

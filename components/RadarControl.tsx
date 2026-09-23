@@ -14,7 +14,7 @@ interface Props {
 }
 
 /**
- * 雷達回波動畫的時間軸控制列：圓形播放鈕 + 帶影格刻度的進度軌 + 相對時間。
+ * JOJO 風格雷達回波動畫時間軸控制列
  */
 export default function RadarControl({
   frames,
@@ -32,50 +32,49 @@ export default function RadarControl({
     minute: "2-digit",
     hour12: false,
   });
-  // 相對最新影格的時間差（分鐘）。最新為「現在」。
   const minsAgo = Math.round((frames[last].time - cur.time) / 60);
-  const relative = minsAgo <= 0 ? "現在" : `−${minsAgo} 分`;
+  const relative = minsAgo <= 0 ? "現在 (NOW)" : `−${minsAgo} 分`;
 
   return (
-    <div className="absolute bottom-[132px] left-1/2 z-[900] flex w-[min(92vw,440px)] -translate-x-1/2 items-center gap-3.5 rounded-xl bg-panel px-4 py-3 shadow-lg backdrop-blur md:bottom-20">
+    <div className="absolute bottom-[132px] left-1/2 z-[900] flex w-[min(94vw,460px)] -translate-x-1/2 items-center gap-3.5 rounded-2xl jojo-panel px-4 py-3 shadow-2xl md:bottom-20">
       <button
         onClick={onTogglePlay}
-        className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-sky-500 text-white shadow-md transition hover:bg-sky-400 active:scale-95"
+        className="jojo-action-btn grid h-11 w-11 shrink-0 place-items-center rounded-xl text-white shadow-md active:scale-95"
         aria-label={playing ? "暫停" : "播放"}
       >
         {playing ? (
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+          <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor">
             <rect x="3" y="2.5" width="3.5" height="11" rx="1" />
             <rect x="9.5" y="2.5" width="3.5" height="11" rx="1" />
           </svg>
         ) : (
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+          <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor">
             <path d="M4 2.6c0-.8.86-1.3 1.55-.9l8 5.4c.64.43.64 1.37 0 1.8l-8 5.4c-.7.4-1.55-.1-1.55-.9V2.6Z" />
           </svg>
         )}
       </button>
 
       <div className="min-w-0 flex-1">
-        <div className="mb-1 flex items-center justify-between text-[11px] text-gray-400">
-          <span className="flex items-center gap-1.5 font-medium text-gray-200">
-            <span className="text-sm">🛰️</span> 雷達回波
+        <div className="mb-1 flex items-center justify-between text-[11px] text-amber-300">
+          <span className="flex items-center gap-1.5 font-black italic tracking-wide text-white">
+            <span className="text-sm">🛰️</span> 隱者之紫・念寫序列
           </span>
-          <span className="tabular-nums">
-            {idx + 1}/{frames.length}
+          <span className="font-mono font-bold text-purple-300">
+            FRAME {idx + 1}/{frames.length}
           </span>
         </div>
 
-        {/* 進度軌：底軌 + 進度填色 + 影格刻度 + 原生 range（透明軌、可拖曳） */}
+        {/* 進度軌 */}
         <div className="relative flex h-5 items-center">
-          <div className="absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-white/12" />
+          <div className="absolute inset-x-0 top-1/2 h-2 -translate-y-1/2 rounded-full bg-purple-950 border border-purple-800" />
           <div
-            className="absolute left-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-gradient-to-r from-sky-500 to-sky-300"
+            className="absolute left-0 top-1/2 h-2 -translate-y-1/2 rounded-full bg-gradient-to-r from-amber-400 to-purple-500 shadow-[0_0_10px_rgba(250,204,21,0.5)]"
             style={{ width: `${pct}%` }}
           />
           {frames.map((f, i) => (
             <span
               key={f.path}
-              className="absolute top-1/2 h-1.5 w-px -translate-x-1/2 -translate-y-1/2 bg-white/25"
+              className="absolute top-1/2 h-2 w-px -translate-x-1/2 -translate-y-1/2 bg-amber-400/40"
               style={{ left: `${last > 0 ? (i / last) * 100 : 0}%` }}
             />
           ))}
@@ -90,19 +89,19 @@ export default function RadarControl({
           />
         </div>
 
-        <div className="mt-1 flex items-center justify-between text-[11px] text-gray-400">
-          <span>2 小時前</span>
-          <span>現在</span>
+        <div className="mt-1 flex items-center justify-between font-mono text-[10px] text-purple-300 font-bold">
+          <span>−2H 前</span>
+          <span>即時念寫</span>
         </div>
       </div>
 
       <div className="shrink-0 text-right">
-        <div className="font-mono text-base font-semibold tabular-nums leading-none text-gray-100">
+        <div className="font-mono text-base font-black tabular-nums leading-none text-amber-300 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
           {clock}
         </div>
         <div
-          className={`mt-1 text-[11px] ${
-            minsAgo <= 0 ? "text-sky-300" : "text-gray-400"
+          className={`mt-1 font-bold text-[10px] uppercase tracking-wider ${
+            minsAgo <= 0 ? "text-amber-400" : "text-purple-300"
           }`}
         >
           {relative}

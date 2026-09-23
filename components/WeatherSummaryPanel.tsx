@@ -69,26 +69,30 @@ export default function WeatherSummaryPanel({
   const s = meta.summary;
 
   return (
-    <div className="pointer-events-auto w-80 glass-panel rounded-2xl p-4 shadow-2xl">
+    <div className="pointer-events-auto w-84 jojo-panel rounded-2xl p-4">
       {/* 標題與即時連線標籤 */}
-      <div className="flex items-center justify-between border-b border-white/10 pb-3">
-        <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-tr from-sky-500 to-indigo-500 text-base shadow-[0_0_12px_rgba(56,189,248,0.4)]">
-            🇹🇼
+      <div className="flex items-center justify-between border-b-2 border-amber-400/40 pb-3">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-amber-400 to-purple-600 text-lg shadow-[0_0_15px_rgba(250,204,21,0.6)] border border-amber-300">
+            ★
           </div>
           <div>
-            <h1 className="text-base font-bold tracking-tight text-white">
-              台灣即時氣象
-            </h1>
-            <p className="text-[11px] text-slate-400">中央氣象署 CWA 觀測網</p>
+            <div className="flex items-center gap-1.5">
+              <h1 className="text-base font-black italic tracking-wide text-amber-300 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
+                台灣即時氣象
+              </h1>
+              <span className="rounded bg-purple-700/80 px-1.5 py-0.5 font-bold text-[11px] text-white border border-amber-400/50 shadow-sm">
+                林丞斌
+              </span>
+            </div>
+            <p className="text-[10px] font-bold tracking-wider text-purple-300 uppercase">
+              STAND: WEATHER REPORT · 氣候預報
+            </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-1 text-[11px] font-semibold text-emerald-300">
-          <span className="relative flex h-2 w-2">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-          </span>
+        <div className="flex items-center gap-1 rounded-lg bg-purple-950/80 border-2 border-amber-400/80 px-2.5 py-1 text-[11px] font-black text-amber-300 shadow-[2px_2px_0px_#9333ea]">
+          <span className="jojo-menace text-xs">ゴ</span>
           <span>{meta.stationCount} 站連線</span>
         </div>
       </div>

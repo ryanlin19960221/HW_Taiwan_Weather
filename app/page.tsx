@@ -334,28 +334,25 @@ export default function Home() {
 
       {/* 左下：即時連線與資料更新面板（桌機） */}
       {meta && (
-        <div className="absolute bottom-4 left-4 z-[900] hidden glass-panel rounded-2xl px-4 py-2.5 text-xs text-slate-300 shadow-2xl md:block">
+        <div className="absolute bottom-4 left-4 z-[900] hidden jojo-panel rounded-2xl px-4 py-2.5 text-xs shadow-2xl md:block">
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2">
-              <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-              </span>
-              <span className="font-semibold text-slate-100">CWA 觀測網</span>
+              <span className="text-amber-400 font-black text-sm">★</span>
+              <span className="font-black text-amber-300">台灣即時氣象-林丞斌</span>
             </div>
-            <div className="h-3 w-px bg-white/10" />
-            <div>
+            <div className="h-3 w-px bg-amber-400/40" />
+            <div className="text-slate-200">
               觀測：
-              <span className="font-mono font-bold text-sky-300 ml-1">
+              <span className="font-mono font-bold text-amber-300 ml-1">
                 {new Date(meta.updatedAt).toLocaleString("zh-TW", { hour12: false })}
               </span>
             </div>
             <button
               onClick={loadWeather}
-              className="ml-2 flex items-center gap-1.5 rounded-xl bg-white/10 px-3 py-1 font-medium text-slate-200 transition hover:bg-white/20 active:scale-95 border border-white/5"
+              className="jojo-btn ml-2 flex items-center gap-1.5 rounded-xl px-3 py-1 font-black text-amber-300 transition active:scale-95"
             >
-              <span className={loading ? "animate-spin" : ""}>↻</span>
-              <span>重新整理</span>
+              <span className={loading ? "animate-spin" : ""}>⚡</span>
+              <span>替身同步 (重新整理)</span>
             </button>
           </div>
         </div>
