@@ -12,3 +12,4 @@ session-export-*.zip
 .env.local
 .env*.local
 node_modules
+api_backup/

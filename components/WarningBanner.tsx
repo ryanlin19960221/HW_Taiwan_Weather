@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { fetchLiveWarnings } from "@/lib/client-weather";
 
 interface Warning {
   id: string;
@@ -56,11 +57,10 @@ export default function WarningBanner() {
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch("/api/warnings", { cache: "no-store" });
-      const json = (await res.json()) as WarningsResponse;
+      const json = await fetchLiveWarnings();
       if (json.success) {
         setWarnings(json.warnings ?? []);
-        setStale(Boolean(json.stale));
+        setStale(false);
       }
     } catch {
       // 輔助特報

@@ -5,6 +5,7 @@ import { useMap } from "react-leaflet";
 import L from "leaflet";
 import type { WeatherFeature } from "@/lib/types";
 import type { GfsWindGrid } from "@/lib/gfs-wind";
+import { assetUrl } from "@/lib/basePath";
 
 interface WindVector {
   lng: number;
@@ -230,7 +231,7 @@ export default function WindParticleLayer({
         // fall through
       }
       try {
-        const res = await fetch("/data/gfs-wind.json", { cache: "no-store" });
+        const res = await fetch(assetUrl("/data/gfs-wind.json"), { cache: "no-store" });
         const json: unknown = res.ok ? await res.json() : null;
         if (isWindGrid(json)) return { ...json, stale: true, fallback: "static" };
       } catch {

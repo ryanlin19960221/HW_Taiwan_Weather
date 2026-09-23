@@ -1,6 +1,7 @@
 "use client";
 
 import type { WeatherApiResponse } from "@/lib/types";
+import { assetUrl } from "@/lib/basePath";
 
 function fmtTime(iso: string | null): string {
   if (!iso) return "—";
@@ -73,8 +74,13 @@ export default function WeatherSummaryPanel({
       {/* 標題與即時連線標籤 */}
       <div className="flex items-center justify-between border-b-2 border-amber-400/40 pb-3">
         <div className="flex items-center gap-2.5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-amber-400 to-purple-600 text-lg shadow-[0_0_15px_rgba(250,204,21,0.6)] border border-amber-300">
-            ★
+          <div className="relative h-10 w-10 overflow-hidden rounded-xl border-2 border-amber-300 shadow-[0_0_15px_rgba(250,204,21,0.6)] flex-shrink-0">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={assetUrl("/images/jojo/jotaro.jpg")}
+              alt="Jotaro"
+              className="h-full w-full object-cover"
+            />
           </div>
           <div>
             <div className="flex items-center gap-1.5">

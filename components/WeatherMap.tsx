@@ -17,6 +17,7 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import * as turf from "@turf/turf";
 import type { Feature, FeatureCollection, Polygon, MultiPolygon } from "geojson";
+import { assetUrl } from "@/lib/basePath";
 import type {
   WeatherFeatureCollection,
   WeatherFeature,
@@ -709,7 +710,7 @@ export default function WeatherMap({
   // 載入縣市界線 GeoJSON。
   useEffect(() => {
     let cancelled = false;
-    fetch("/data/taiwan-counties.geojson")
+    fetch(assetUrl("/data/taiwan-counties.geojson"))
       .then((r) => (r.ok ? r.json() : null))
       .then((j) => {
         if (!cancelled && j) setCounties(j as FeatureCollection);

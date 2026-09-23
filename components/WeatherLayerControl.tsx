@@ -1,6 +1,7 @@
 "use client";
 
 import type { LayerKey } from "@/lib/types";
+import { assetUrl } from "@/lib/basePath";
 
 export const MODES: {
   key: LayerKey;
@@ -9,6 +10,7 @@ export const MODES: {
   icon: string;
   desc: string;
   tag: string;
+  avatar: string;
 }[] = [
   {
     key: "temperature",
@@ -17,6 +19,7 @@ export const MODES: {
     icon: "🔥",
     desc: "IDW 平滑填色",
     tag: "Magician's Red",
+    avatar: "/images/jojo/avdol.jpg",
   },
   {
     key: "precipitation",
@@ -25,6 +28,7 @@ export const MODES: {
     icon: "🌧️",
     desc: "即時連續雨場",
     tag: "Catch The Rainbow",
+    avatar: "/images/jojo/kakyoin.jpg",
   },
   {
     key: "wind",
@@ -33,6 +37,7 @@ export const MODES: {
     icon: "🌪️",
     desc: "NOAA GFS 動畫",
     tag: "Golden Wind",
+    avatar: "/images/jojo/giorno.jpg",
   },
   {
     key: "radar",
@@ -41,6 +46,7 @@ export const MODES: {
     icon: "🛰️",
     desc: "RainViewer 序列",
     tag: "Hermit Purple",
+    avatar: "/images/jojo/joseph.jpg",
   },
   {
     key: "typhoon",
@@ -49,6 +55,7 @@ export const MODES: {
     icon: "🌀",
     desc: "CWA 官方預報",
     tag: "Weather Report",
+    avatar: "/images/jojo/jotaro.jpg",
   },
   {
     key: "humidity",
@@ -57,6 +64,7 @@ export const MODES: {
     icon: "💧",
     desc: "水氣連續場",
     tag: "Hierophant Green",
+    avatar: "/images/jojo/kakyoin.jpg",
   },
   {
     key: "weather",
@@ -65,6 +73,7 @@ export const MODES: {
     icon: "☀️",
     desc: "各縣市天候符號",
     tag: "The Sun",
+    avatar: "/images/jojo/josuke.jpg",
   },
   {
     key: "stations",
@@ -73,6 +82,7 @@ export const MODES: {
     icon: "📍",
     desc: "362 站即時坐標",
     tag: "The World",
+    avatar: "/images/jojo/dio.jpg",
   },
 ];
 
@@ -158,14 +168,24 @@ export default function WeatherLayerControl({
               key={m.key}
               onClick={() => onModeChange(m.key)}
               type="button"
-              className={`group flex flex-col items-start rounded-xl p-2.5 text-left ${
+              className={`group flex flex-col items-start rounded-xl p-2.5 text-left transition-all ${
                 active ? "jojo-btn jojo-btn-active" : "jojo-btn"
               }`}
             >
               <div className="flex w-full items-center justify-between">
-                <span className="text-sm">{m.icon}</span>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-5 h-5 rounded-full overflow-hidden border border-amber-300 shadow-sm flex-shrink-0">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={assetUrl(m.avatar)}
+                      alt={m.stand}
+                      className="w-full h-full object-cover group-hover:scale-110 transition-transform"
+                    />
+                  </div>
+                  <span className="text-xs">{m.icon}</span>
+                </div>
                 <span
-                  className={`text-[9px] font-mono uppercase tracking-tighter ${
+                  className={`text-[9px] font-mono uppercase tracking-tighter truncate max-w-[62px] ${
                     active ? "text-purple-950 font-bold" : "text-amber-300/80"
                   }`}
                 >

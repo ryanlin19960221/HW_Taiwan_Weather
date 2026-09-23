@@ -3,6 +3,8 @@
 > 類 Windy 風格與 JOJO 替身美學的台灣即時氣象視覺化地圖：**無使用 Windy API、SDK、圖磚或內嵌服務**。
 > 本專案純手刻實作氣象資料管線、逐像素 IDW 空間內插填色場、NOAA GFS 粒子風場 Canvas 動畫、雷達回波回放與颱風動態軌跡。
 > 專案監修：林丞斌
+> 
+> 🌐 **GitHub Pages 線上展示**：[https://ryanlin19960221.github.io/HW_Taiwan_Weather/](https://ryanlin19960221.github.io/HW_Taiwan_Weather/)
 
 ![主要功能展示](docs/screenshot.png)
 
@@ -50,6 +52,11 @@ npm run dev
 ```
 
 開啟瀏覽器前往 [http://localhost:3000](http://localhost:3000) 即可瀏覽！
+
+### 4. GitHub Pages 自動建置與部署
+
+專案已配置 `.github/workflows/deploy.yml`。每次推送到 `main` 分支時，GitHub Actions 會自動執行靜態導出（`npm run build`）並發布至 GitHub Pages：
+👉 **線上伺服器網址**：[https://ryanlin19960221.github.io/HW_Taiwan_Weather/](https://ryanlin19960221.github.io/HW_Taiwan_Weather/)
 
 ---
 

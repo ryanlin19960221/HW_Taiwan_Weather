@@ -16,6 +16,8 @@ import WarningBanner from "@/components/WarningBanner";
 import MobileControls from "@/components/MobileControls";
 import RadarControl from "@/components/RadarControl";
 import TyphoonTimeline from "@/components/TyphoonTimeline";
+import JojoCompanion from "@/components/JojoCompanion";
+import { fetchLiveWeather, fetchLiveTyphoons } from "@/lib/client-weather";
 
 // Leaflet 依賴 window，需關閉 SSR。
 const WeatherMap = dynamic(() => import("@/components/WeatherMap"), {
@@ -74,16 +76,8 @@ export default function Home() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/weather/current");
-      const json = (await res.json().catch(() => null)) as WeatherApiResponse | null;
-      if (!res.ok || !json?.success) {
-        // 502/503 代表後端與氣象署連線失敗或服務暫停，不把原始錯誤字串顯示給使用者。
-        if (res.status === 502 || res.status === 503) {
-          throw new Error("氣象資料服務暫時無法使用，請稍後再試。");
-        }
-        throw new Error(json?.error || `伺服器回應 ${res.status}`);
-      }
-      setMeta(json);
+      const data = await fetchLiveWeather();
+      setMeta(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "載入失敗");
     } finally {
@@ -100,11 +94,10 @@ export default function Home() {
     if (!showTyphoon) return;
     let cancelled = false;
     setTyphoonLoaded(false);
-    fetch("/api/typhoon", { cache: "no-store" })
-      .then((r) => r.json() as Promise<TyphoonApiResponse>)
-      .then((j) => {
+    fetchLiveTyphoons()
+      .then((list) => {
         if (cancelled) return;
-        setTyphoons(j.success ? j.typhoons : []);
+        setTyphoons(list);
         setTyphoonLoaded(true);
       })
       .catch(() => {
@@ -269,8 +262,9 @@ export default function Home() {
         </div>
       )}
 
-      {/* 右上：圖層控制（桌機） */}
+      {/* 右上：JOJO 替身使者圖鑑與圖層控制（桌機） */}
       <div className="absolute right-4 top-4 z-[900] hidden flex-col items-end gap-3 md:flex">
+        <JojoCompanion currentLayer={mode} onSelectLayer={setMode} />
         <WeatherLayerControl
           mode={mode}
           onModeChange={setMode}
@@ -290,6 +284,11 @@ export default function Home() {
             {locateMsg}
           </div>
         )}
+      </div>
+
+      {/* 手機版懸浮 JOJO 圖鑑按鈕 */}
+      <div className="fixed top-20 right-3 z-[950] md:hidden pointer-events-auto">
+        <JojoCompanion currentLayer={mode} onSelectLayer={setMode} />
       </div>
 
       {/* 右下：圖例（桌機） */}
