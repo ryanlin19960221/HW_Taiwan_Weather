@@ -1,0 +1,241 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+/* Leaflet 容器需明確高度 */
+.leaflet-container {
+  height: 100%;
+  width: 100%;
+  background: #0b1120;
+  font-family: inherit;
+}
+
+/* 深色風格的 popup。
+   用高優先權 + !important，避免被較晚載入的 leaflet.css 預設白底蓋掉。 */
+.leaflet-container .leaflet-popup-content-wrapper,
+.leaflet-container .leaflet-popup-tip {
+  background: rgba(17, 24, 39, 0.96) !important;
+  color: #f3f4f6 !important;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.leaflet-container .leaflet-popup-content {
+  margin: 10px 12px;
+  line-height: 1.5;
+  color: #f3f4f6;
+}
+
+.leaflet-container .leaflet-popup-close-button {
+  color: #9ca3af !important;
+}
+
+/* 風向箭頭 */
+.wind-arrow {
+  background: none;
+  border: none;
+}
+
+.wind-vector-label {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.75));
+}
+
+/* 氣溫數字標籤 */
+.temp-label-wrap {
+  background: none;
+  border: none;
+}
+
+.temp-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 9px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  color: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.35);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+  text-shadow: 0 0 2px rgba(0, 0, 0, 0.9), 0 1px 1px rgba(0, 0, 0, 0.7);
+}
+
+.temp-label-big {
+  min-width: 42px;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 15px;
+  border-width: 2px;
+  font-size: 16px;
+}
+
+/* 雷達時間軸滑桿：透明軌（由下層 div 呈現刻度與進度），僅保留自訂 thumb */
+.radar-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 100%;
+  background: transparent;
+  cursor: pointer;
+  margin: 0;
+}
+.radar-range::-webkit-slider-runnable-track {
+  height: 100%;
+  background: transparent;
+}
+.radar-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  height: 15px;
+  width: 15px;
+  border-radius: 9999px;
+  background: #fff;
+  border: 2px solid #0ea5e9;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
+  margin-top: 2.5px; /* 對齊 20px 高容器中央的 1.5px 軌 */
+}
+.radar-range::-moz-range-track {
+  height: 100%;
+  background: transparent;
+}
+.radar-range::-moz-range-thumb {
+  height: 15px;
+  width: 15px;
+  border-radius: 9999px;
+  background: #fff;
+  border: 2px solid #0ea5e9;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
+}
+
+/* 颱風中心：旋轉的颱風符號 */
+.typhoon-icon,
+.typhoon-fix-icon {
+  background: none;
+  border: none;
+}
+
+.typhoon-eye {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 30px;
+  line-height: 1;
+  filter: drop-shadow(0 0 7px var(--ty-color, rgba(244, 63, 94, 0.9)))
+    drop-shadow(0 0 3px var(--ty-color, rgba(244, 63, 94, 0.9)))
+    drop-shadow(0 1px 2px rgba(0, 0, 0, 0.8));
+  animation: typhoon-spin 6s linear infinite;
+}
+
+/* 中心脈動光暈：往外擴散淡出，強化「即時位置」感 */
+.typhoon-eye::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 34px;
+  height: 34px;
+  border-radius: 9999px;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--ty-color, #f43f5e) 55%, transparent) 0%,
+    transparent 70%
+  );
+  animation: typhoon-pulse 2.4s ease-out infinite;
+  pointer-events: none;
+}
+
+@keyframes typhoon-pulse {
+  0% {
+    opacity: 0.7;
+    transform: translate(-50%, -50%) scale(0.5);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(2.6);
+  }
+}
+
+/* 中心強度徽章：浮在颱風符號右上，色框隨強度 */
+.typhoon-badge-icon {
+  background: none;
+  border: none;
+}
+
+.typhoon-badge {
+  position: absolute;
+  left: 20px;
+  top: -12px;
+  transform: translateY(-100%);
+  white-space: nowrap;
+  padding: 3px 8px;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.82);
+  border: 1px solid var(--ty-color, #f43f5e);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.55),
+    0 0 10px color-mix(in srgb, var(--ty-color, #f43f5e) 45%, transparent);
+  backdrop-filter: blur(2px);
+  pointer-events: none;
+}
+
+.typhoon-badge-title {
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--ty-color, #f43f5e);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+.typhoon-badge-row {
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: #f1f5f9;
+}
+
+.typhoon-badge-sub {
+  font-size: 10px;
+  line-height: 1.3;
+  color: #cbd5e1;
+}
+
+@keyframes typhoon-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 預報時距標籤（+24h…） */
+.typhoon-tau {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 62px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  color: #fff;
+  background: rgba(244, 63, 94, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.7);
+}

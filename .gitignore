@@ -1,0 +1,14 @@
+/node_modules
+/.next
+/out
+/.cache
+next-env.d.ts
+tsconfig.tsbuildinfo
+.claude/
+session-export-*.zip
+
+# Local environment files and API keys
+.env
+.env.local
+.env*.local
+node_modules

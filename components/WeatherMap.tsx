@@ -1,0 +1,1238 @@
+"use client";
+
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  MapContainer,
+  TileLayer,
+  CircleMarker,
+  Circle,
+  Marker,
+  Polyline,
+  Popup,
+  GeoJSON,
+  useMap,
+  useMapEvents,
+} from "react-leaflet";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
+import * as turf from "@turf/turf";
+import type { Feature, FeatureCollection, Polygon, MultiPolygon } from "geojson";
+import type {
+  WeatherFeatureCollection,
+  WeatherFeature,
+  LayerKey,
+  Typhoon,
+  TyphoonFix,
+} from "@/lib/types";
+import {
+  temperatureColor,
+  windColor,
+  humidityColor,
+} from "@/lib/color-scale";
+import {
+  buildTyphoonTimeline,
+  sampleAt,
+  categorize,
+  type TyMoment,
+} from "@/lib/typhoonFrames";
+import WeatherStationPopup from "./WeatherStationPopup";
+import InterpolatedField from "./InterpolatedField";
+import WindParticleLayer from "./WindParticleLayer";
+
+// 台灣本島 + 離島的初始視角範圍。
+const TAIWAN_BOUNDS = L.latLngBounds([21.7, 118.0], [25.5, 122.2]);
+const MAP_LIMITS = L.latLngBounds([19.5, 116.0], [27.8, 124.8]);
+
+interface UserLoc {
+  lat: number;
+  lng: number;
+}
+
+export interface RadarFrame {
+  time: number; // unix 秒
+  path: string;
+}
+
+interface Props {
+  data: WeatherFeatureCollection;
+  mode: LayerKey;
+  basemap: "dark" | "osm";
+  showCounties: boolean;
+  showWindStations: boolean;
+  showTempLabels: boolean;
+  radar: { host: string; frames: RadarFrame[]; idx: number } | null;
+  typhoons: Typhoon[] | null;
+  typhoonTime: number | null; // 時間軸目前時刻（unix ms）；null＝顯示目前中心
+  userLocation: UserLoc | null;
+  onCountyDetected?: (county: string | null) => void;
+}
+
+// 深色底圖用 Esri World Dark Gray Base（免 API key；CARTO 自 2026/8 起 raster 圖磚需帶 key，否則加浮水印）。
+// Esri 此服務原生只到 z16，更高層級由 Leaflet 放大既有圖磚。
+const BASEMAPS: Record<
+  "dark" | "osm",
+  {
+    url: string;
+    attribution: string;
+    // 額外的 TileLayer 選項；只放各底圖真正需要的鍵，避免把 undefined 傳給 Leaflet 覆蓋預設值。
+    options: { subdomains?: string; maxNativeZoom?: number };
+  }
+> = {
+  dark: {
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
+    attribution:
+      'Tiles &copy; <a href="https://www.esri.com/">Esri</a> &mdash; Esri, DeLorme, NAVTEQ',
+    options: { maxNativeZoom: 16 },
+  },
+  osm: {
+    url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    attribution:
+      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    options: { subdomains: "abc" },
+  },
+};
+
+// 雷達影格懶載入：只先建立目前影格前後各幾格的 TileLayer，其餘播放／拖曳到時再建立。
+// 一次預載全部 13 格會同時打上百張 RainViewer 圖磚而觸發 429。
+const RADAR_PRELOAD = 2;
+
+/** 目前影格 ±RADAR_PRELOAD 格（循環，播放到尾端回到開頭也不會空白）的 path 集合。 */
+function radarWindow(frames: RadarFrame[], idx: number): string[] {
+  const n = frames.length;
+  if (n === 0) return [];
+  const out: string[] = [];
+  for (let d = -RADAR_PRELOAD; d <= RADAR_PRELOAD; d++) {
+    out.push(frames[(((idx + d) % n) + n) % n].path);
+  }
+  return out;
+}
+
+/**
+ * 雷達回波動畫：RainViewer 圖磚（標準 XYZ tiles，正確對齊），依 idx 切換 opacity 播放。
+ * 已建立過的影格 TileLayer 會保留（圖磚已在瀏覽器快取），之後切回去仍是瞬間完成。
+ */
+function RadarFrames({
+  host,
+  frames,
+  idx,
+}: {
+  host: string;
+  frames: RadarFrame[];
+  idx: number;
+}) {
+  const [mounted, setMounted] = useState<Set<string>>(
+    () => new Set(radarWindow(frames, idx))
+  );
+
+  useEffect(() => {
+    setMounted((prev) => {
+      const missing = radarWindow(frames, idx).filter((p) => !prev.has(p));
+      if (missing.length === 0) return prev;
+      const next = new Set(prev);
+      missing.forEach((p) => next.add(p));
+      return next;
+    });
+  }, [frames, idx]);
+
+  const current = frames[idx]?.path;
+  return (
+    <>
+      {frames
+        .filter((f) => mounted.has(f.path))
+        .map((f) => (
+          <TileLayer
+            key={f.path}
+            url={`${host}${f.path}/256/{z}/{x}/{y}/2/1_1.png`}
+            opacity={f.path === current ? 0.65 : 0}
+            zIndex={250}
+            // RainViewer 只在 z7 以下有全區覆蓋；z8+ 的外海圖磚會回傳
+            // 「Zoom Level Not Supported」佔位圖。故原生只取到 z7，更高層級
+            // 由 Leaflet 放大既有圖磚（略糊但連續、不破圖）。
+            maxNativeZoom={7}
+            maxZoom={19}
+            // 所有影格帶相同字串，Leaflet 的 attribution control 會去重只顯示一次。
+            attribution='雷達 &copy; <a href="https://www.rainviewer.com/">RainViewer</a>'
+          />
+        ))}
+    </>
+  );
+}
+
+// 依颱風強度分級決定主色（冷→暖：熱帶低壓→輕→中→強颱）。
+function categoryColor(category: string | null): string {
+  switch (category) {
+    case "熱帶性低氣壓":
+      return "#38bdf8"; // sky
+    case "輕度颱風":
+      return "#facc15"; // yellow
+    case "中度颱風":
+      return "#fb923c"; // orange
+    case "強烈颱風":
+      return "#f43f5e"; // rose
+    default:
+      return "#f43f5e";
+  }
+}
+
+// 16 方位英文代碼 → 中文。
+const COMPASS: Record<string, string> = {
+  N: "北", NNE: "北北東", NE: "東北", ENE: "東北東",
+  E: "東", ESE: "東南東", SE: "東南", SSE: "南南東",
+  S: "南", SSW: "南南西", SW: "西南", WSW: "西南西",
+  W: "西", WNW: "西北西", NW: "西北", NNW: "北北西",
+};
+const dirZh = (d: string | null): string => (d ? COMPASS[d] ?? d : "");
+
+// 颱風中心符號 divIcon（旋轉），中心點用；光暈色隨強度。
+function typhoonCenterIcon(color: string): L.DivIcon {
+  return L.divIcon({
+    className: "typhoon-icon",
+    html: `<div class="typhoon-eye" style="--ty-color:${color}">🌀</div>`,
+    iconSize: [34, 34],
+    iconAnchor: [17, 17],
+  });
+}
+
+const fmtFixTime = (iso: string | null): string => {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleString("zh-TW", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+};
+
+/** 預報有效時刻＝預報基準時間＋時距，格式「7/10 20時」。 */
+const fmtValidTime = (fix: TyphoonFix): string => {
+  if (fix.time === null || fix.tau === null) return "";
+  const base = new Date(fix.time);
+  if (Number.isNaN(base.getTime())) return "";
+  const d = new Date(base.getTime() + fix.tau * 3600_000);
+  return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}時`;
+};
+
+/** 預報點的有效時刻標籤 icon（7/10 20時）。 */
+function validTimeLabelIcon(label: string): L.DivIcon {
+  return L.divIcon({
+    className: "typhoon-fix-icon",
+    html: `<div class="typhoon-tau">${label}</div>`,
+    iconSize: [68, 18],
+    iconAnchor: [34, 9],
+  });
+}
+
+/** 颱風定位點的詳情 popup 內容。 */
+function TyphoonFixPopup({
+  name,
+  fix,
+  isForecast,
+}: {
+  name: string;
+  fix: TyphoonFix;
+  isForecast: boolean;
+}) {
+  return (
+    <div className="text-sm">
+      <div className="font-bold text-white">
+        🌀 {name}
+        {isForecast && fix.tau !== null && (
+          <span className="ml-1 text-rose-300">預報 {fmtValidTime(fix)}</span>
+        )}
+      </div>
+      <div className="mt-0.5 text-[11px] text-gray-400">
+        {isForecast ? "預報基準 " : ""}
+        {fmtFixTime(fix.time)}
+      </div>
+      <dl className="mt-1 grid grid-cols-[auto,1fr] gap-x-3 gap-y-0.5 text-gray-200">
+        {fix.pressure !== null && (
+          <>
+            <dt className="text-gray-400">中心氣壓</dt>
+            <dd>{fix.pressure} hPa</dd>
+          </>
+        )}
+        {fix.maxWind !== null && (
+          <>
+            <dt className="text-gray-400">近中心風速</dt>
+            <dd>{fix.maxWind} m/s</dd>
+          </>
+        )}
+        {fix.gust !== null && (
+          <>
+            <dt className="text-gray-400">最大陣風</dt>
+            <dd>{fix.gust} m/s</dd>
+          </>
+        )}
+        {fix.stormRadius !== null && (
+          <>
+            <dt className="text-gray-400">七級風半徑</dt>
+            <dd>{fix.stormRadius} km</dd>
+          </>
+        )}
+        {fix.severeRadius !== null && (
+          <>
+            <dt className="text-gray-400">十級風半徑</dt>
+            <dd>{fix.severeRadius} km</dd>
+          </>
+        )}
+        {fix.moveDir && (
+          <>
+            <dt className="text-gray-400">移動</dt>
+            <dd>
+              向{dirZh(fix.moveDir)}
+              {fix.moveSpeed !== null ? ` ${fix.moveSpeed} km/h` : ""}
+            </dd>
+          </>
+        )}
+        {fix.radius70 !== null && (
+          <>
+            <dt className="text-gray-400">70% 機率半徑</dt>
+            <dd>{fix.radius70} km</dd>
+          </>
+        )}
+      </dl>
+    </div>
+  );
+}
+
+// 中心強度徽章 divIcon：強度分級／風速／氣壓／移動／分析時間。
+// 讓「強度」與「有沒有更新」一眼可見（用 CSS transform 浮在中心右上）。
+function typhoonBadgeIcon(t: Typhoon, color: string): L.DivIcon | null {
+  const c = t.current;
+  if (!c) return null;
+  const stat = [
+    c.maxWind !== null ? `${c.maxWind} m/s` : null,
+    c.pressure !== null ? `${c.pressure} hPa` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  const move = c.moveDir
+    ? `向${dirZh(c.moveDir)}${c.moveSpeed !== null ? ` ${c.moveSpeed} km/h` : ""}`
+    : "";
+  const analysis = c.time ? `分析 ${fmtFixTime(c.time)}` : "";
+  const sub = [move, analysis].filter(Boolean).join(" · ");
+  return L.divIcon({
+    className: "typhoon-badge-icon",
+    html: `
+      <div class="typhoon-badge" style="--ty-color:${color}">
+        <div class="typhoon-badge-title">${t.category ?? "熱帶氣旋"} ${t.name}</div>
+        ${stat ? `<div class="typhoon-badge-row">${stat}</div>` : ""}
+        ${sub ? `<div class="typhoon-badge-sub">${sub}</div>` : ""}
+      </div>`,
+    iconSize: [0, 0],
+    iconAnchor: [0, 0],
+  });
+}
+
+const fmtClock = (ms: number): string => {
+  const d = new Date(ms);
+  return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}時`;
+};
+
+// 播放時的移動中心徽章：用「取樣後」的即時強度＋顯示時刻。
+function typhoonSampleBadgeIcon(
+  name: string,
+  color: string,
+  s: TyMoment
+): L.DivIcon {
+  const stat = [
+    s.maxWind !== null ? `${Math.round(s.maxWind)} m/s` : null,
+    s.pressure !== null ? `${Math.round(s.pressure)} hPa` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  const sub = `${s.isForecast ? "預報" : "實測"} ${fmtClock(s.t)}`;
+  const category = categorize(s.maxWind) ?? "熱帶氣旋";
+  return L.divIcon({
+    className: "typhoon-badge-icon",
+    html: `
+      <div class="typhoon-badge" style="--ty-color:${color}">
+        <div class="typhoon-badge-title">${category} ${name}</div>
+        ${stat ? `<div class="typhoon-badge-row">${stat}</div>` : ""}
+        <div class="typhoon-badge-sub">${sub}</div>
+      </div>`,
+    iconSize: [0, 0],
+    iconAnchor: [0, 0],
+  });
+}
+
+/**
+ * 用 turf 把各預報點的 70% 機率圈 + 沿途路徑 buffer 聯集成一片平滑的
+ * 「預報不確定錐」，取代零散的小機率圈。無任何機率半徑時回傳 null。
+ */
+function buildCone(
+  current: TyphoonFix | null,
+  forecast: TyphoonFix[]
+): Feature<Polygon | MultiPolygon> | null {
+  const withR = forecast.filter((f) => f.radius70 && f.radius70 > 0);
+  if (withR.length === 0) return null;
+
+  const nodes = current ? [current, ...forecast] : forecast;
+  const parts: Feature<Polygon | MultiPolygon>[] = [];
+
+  // 路徑主軸 buffer，確保各機率圈之間連續不斷裂。
+  if (nodes.length >= 2) {
+    const spine = turf.buffer(
+      turf.lineString(nodes.map((n) => [n.lng, n.lat])),
+      25,
+      { units: "kilometers" }
+    );
+    if (spine) parts.push(spine as Feature<Polygon | MultiPolygon>);
+  }
+  for (const f of withR) {
+    parts.push(
+      turf.circle([f.lng, f.lat], f.radius70 as number, {
+        steps: 48,
+        units: "kilometers",
+      }) as Feature<Polygon | MultiPolygon>
+    );
+  }
+
+  if (parts.length === 1) return parts[0];
+  return turf.union(
+    turf.featureCollection(parts)
+  ) as Feature<Polygon | MultiPolygon> | null;
+}
+
+/**
+ * 颱風圖層：過去路徑（灰實線）＋官方預報路徑（虛線，色隨強度）＋預報不確定錐，
+ * 中心以旋轉颱風符號＋雙暴風圈（七級／十級風）＋強度徽章標示。
+ * 資料來自 CWA W-C0034-005。
+ */
+function TyphoonLayer({
+  typhoon,
+  activeTime,
+}: {
+  typhoon: Typhoon;
+  activeTime: number | null;
+}) {
+  const { past, current, forecast, name, category } = typhoon;
+  const color = categoryColor(category);
+
+  const toLatLng = (f: TyphoonFix): L.LatLngTuple => [f.lat, f.lng];
+  const pastLine = past.map(toLatLng);
+  // 預報線從目前中心接續。
+  const forecastLine = current
+    ? [toLatLng(current), ...forecast.map(toLatLng)]
+    : forecast.map(toLatLng);
+
+  const cone = useMemo(() => buildCone(current, forecast), [current, forecast]);
+
+  // 時間軸取樣：依 activeTime 內插出中心即時狀態，驅動移動符號與已行經亮軌。
+  const moments = useMemo(
+    () => buildTyphoonTimeline([typhoon])?.tracks[0]?.moments ?? [],
+    [typhoon]
+  );
+  const sample =
+    activeTime !== null && moments.length ? sampleAt(moments, activeTime) : null;
+  const activeColor = sample ? categoryColor(categorize(sample.maxWind)) : color;
+  const activeIcon = useMemo(
+    () => typhoonCenterIcon(activeColor),
+    [activeColor]
+  );
+  const activeBadge = sample
+    ? typhoonSampleBadgeIcon(name, activeColor, sample)
+    : null;
+  const traveled: L.LatLngTuple[] =
+    sample && activeTime !== null
+      ? [
+          ...moments.filter((m) => m.t <= activeTime).map<L.LatLngTuple>((m) => [m.lat, m.lng]),
+          [sample.lat, sample.lng],
+        ]
+      : [];
+
+  // 無時間軸（activeTime=null）時退回顯示目前中心。
+  const centerIcon = useMemo(() => typhoonCenterIcon(color), [color]);
+  const badgeIcon = useMemo(
+    () => typhoonBadgeIcon(typhoon, color),
+    [typhoon, color]
+  );
+
+  return (
+    <>
+      {/* 過去路徑（實線） */}
+      {pastLine.length > 1 && (
+        <Polyline
+          positions={pastLine}
+          pathOptions={{ color: "#cbd5e1", weight: 2, opacity: 0.8 }}
+        />
+      )}
+
+      {/* 預報不確定錐（各預報點 70% 機率圈聯集） */}
+      {cone && (
+        <GeoJSON
+          key={`cone-${typhoon.id}-${current?.time ?? ""}`}
+          data={cone}
+          style={{
+            color,
+            weight: 1,
+            opacity: 0.5,
+            dashArray: "4 6",
+            fillColor: color,
+            fillOpacity: 0.1,
+          }}
+        />
+      )}
+
+      {/* 預報路徑（虛線，色隨強度） */}
+      {forecastLine.length > 1 && (
+        <Polyline
+          positions={forecastLine}
+          pathOptions={{
+            color,
+            weight: 2.5,
+            opacity: sample ? 0.5 : 0.95,
+            dashArray: "6 7",
+          }}
+        />
+      )}
+
+      {/* 已行經亮軌（時間軸播放：從起點到目前顯示時刻） */}
+      {traveled.length > 1 && (
+        <Polyline
+          positions={traveled}
+          pathOptions={{ color: activeColor, weight: 3.5, opacity: 0.95 }}
+        />
+      )}
+
+      {/* 過去定位點（小圓點） */}
+      {past.slice(0, -1).map((f, i) => (
+        <CircleMarker
+          key={`past-${i}`}
+          center={toLatLng(f)}
+          radius={3}
+          pathOptions={{
+            color: "#e2e8f0",
+            weight: 1,
+            fillColor: "#94a3b8",
+            fillOpacity: 0.9,
+          }}
+        >
+          <Popup>
+            <TyphoonFixPopup name={name} fix={f} isForecast={false} />
+          </Popup>
+        </CircleMarker>
+      ))}
+
+      {/* 雙暴風圈：七級風（外，橘）＋十級風（內，紅）。播放時跟著取樣點移動、脹縮。 */}
+      {(() => {
+        const ring = sample
+          ? {
+              center: [sample.lat, sample.lng] as L.LatLngTuple,
+              storm: sample.stormRadius,
+              severe: sample.severeRadius,
+            }
+          : current
+          ? {
+              center: toLatLng(current),
+              storm: current.stormRadius,
+              severe: current.severeRadius,
+            }
+          : null;
+        if (!ring) return null;
+        return (
+          <>
+            {ring.storm && (
+              <Circle
+                center={ring.center}
+                radius={ring.storm * 1000}
+                pathOptions={{
+                  color: "#fbbf24",
+                  weight: 1,
+                  opacity: 0.6,
+                  fillColor: "#fbbf24",
+                  fillOpacity: 0.1,
+                }}
+              />
+            )}
+            {ring.severe && (
+              <Circle
+                center={ring.center}
+                radius={ring.severe * 1000}
+                pathOptions={{
+                  color: "#ef4444",
+                  weight: 1,
+                  opacity: 0.75,
+                  fillColor: "#ef4444",
+                  fillOpacity: 0.16,
+                }}
+              />
+            )}
+          </>
+        );
+      })()}
+
+      {/* 各預報點時距標籤 */}
+      {forecast.map((f, i) =>
+        f.tau !== null ? (
+          <Marker
+            key={`fc-${i}`}
+            position={toLatLng(f)}
+            icon={validTimeLabelIcon(fmtValidTime(f))}
+          >
+            <Popup>
+              <TyphoonFixPopup name={name} fix={f} isForecast />
+            </Popup>
+          </Marker>
+        ) : null
+      )}
+
+      {/* 中心（旋轉颱風符號）＋強度徽章：播放時移動到取樣點，否則落在目前中心 */}
+      {sample ? (
+        <>
+          <Marker
+            position={[sample.lat, sample.lng]}
+            icon={activeIcon}
+            interactive={false}
+            zIndexOffset={1000}
+          />
+          {activeBadge && (
+            <Marker
+              position={[sample.lat, sample.lng]}
+              icon={activeBadge}
+              interactive={false}
+              zIndexOffset={900}
+            />
+          )}
+        </>
+      ) : (
+        current && (
+          <>
+            <Marker
+              position={toLatLng(current)}
+              icon={centerIcon}
+              zIndexOffset={1000}
+            >
+              <Popup>
+                <TyphoonFixPopup name={name} fix={current} isForecast={false} />
+              </Popup>
+            </Marker>
+            {badgeIcon && (
+              <Marker
+                position={toLatLng(current)}
+                icon={badgeIcon}
+                interactive={false}
+                zIndexOffset={900}
+              />
+            )}
+          </>
+        )
+      )}
+    </>
+  );
+}
+
+/**
+ * 進入颱風圖層時，暫時放寬地圖可視/拖曳範圍與最小縮放，並 fitBounds 到
+ * 「台灣 + 整條颱風路徑」；離開圖層（元件卸載）時還原為台灣視野。
+ * 颱風中心常在西太平洋遠處，需比預設更廣的視野才看得到完整路徑。
+ */
+function TyphoonView({ typhoons }: { typhoons: Typhoon[] }) {
+  const map = useMap();
+  useEffect(() => {
+    // 聚焦「目前位置 + 預報路徑 + 台灣」；不含週前的遠洋舊軌跡（會使視野過廣）。
+    const pts: L.LatLngTuple[] = [];
+    for (const t of typhoons) {
+      if (t.current) pts.push([t.current.lat, t.current.lng]);
+      for (const f of t.forecast) pts.push([f.lat, f.lng]);
+    }
+    if (pts.length === 0) return;
+
+    const bounds = L.latLngBounds(pts).extend(TAIWAN_BOUNDS);
+    const prevMinZoom = map.getMinZoom();
+    map.setMinZoom(3);
+    // 移除台灣周邊的硬邊界，讓使用者可拖曳看到遠處颱風。
+    map.setMaxBounds(null as unknown as L.LatLngBounds);
+    map.fitBounds(bounds, { padding: [40, 40], animate: false });
+
+    return () => {
+      map.setMinZoom(prevMinZoom);
+      map.setMaxBounds(MAP_LIMITS);
+      map.fitBounds(TAIWAN_BOUNDS, { animate: false });
+    };
+  }, [typhoons, map]);
+  return null;
+}
+
+/** 使用者定位後平滑移動到該位置。 */
+function FlyToUser({ loc }: { loc: UserLoc | null }) {
+  const map = useMap();
+  useEffect(() => {
+    if (loc) map.flyTo([loc.lat, loc.lng], 11, { duration: 1.2 });
+  }, [loc, map]);
+  return null;
+}
+
+function windArrowIcon(direction: number, speed: number | null): L.DivIcon {
+  const value = speed ?? 0;
+  const color = windColor(speed);
+  const rotate = (direction + 180) % 360;
+  const size = Math.max(22, Math.min(42, 22 + value * 2.4));
+  const center = size / 2;
+  const tipY = 3;
+  const tailY = size - 4;
+  const wing = Math.max(4, size * 0.17);
+  const html =
+    `<div class="wind-vector-label" title="${value.toFixed(1)} m/s">` +
+    `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" style="transform:rotate(${rotate}deg)">` +
+    `<path d="M${center} ${tipY} L${center + wing} ${tailY} L${center} ${
+      tailY - wing * 0.9
+    } L${center - wing} ${tailY} Z" fill="${color}" stroke="rgba(255,255,255,0.85)" stroke-width="0.8"/>` +
+    `</svg></div>`;
+  return L.divIcon({
+    className: "wind-arrow",
+    html,
+    iconSize: [size, size],
+    iconAnchor: [center, center],
+  });
+}
+
+export default function WeatherMap({
+  data,
+  mode,
+  basemap,
+  showCounties,
+  showWindStations,
+  showTempLabels,
+  radar,
+  typhoons,
+  typhoonTime,
+  userLocation,
+  onCountyDetected,
+}: Props) {
+  const [counties, setCounties] = useState<FeatureCollection | null>(null);
+  const [userCounty, setUserCounty] = useState<string | null>(null);
+
+  // 載入縣市界線 GeoJSON。
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/data/taiwan-counties.geojson")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (!cancelled && j) setCounties(j as FeatureCollection);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // 使用者定位後，用 turf 判斷所在縣市。
+  useEffect(() => {
+    if (!userLocation || !counties) {
+      setUserCounty(null);
+      return;
+    }
+    const pt = turf.point([userLocation.lng, userLocation.lat]);
+    let found: string | null = null;
+    for (const f of counties.features) {
+      const geom = f.geometry as Polygon | MultiPolygon;
+      if (geom.type !== "Polygon" && geom.type !== "MultiPolygon") continue;
+      if (turf.booleanPointInPolygon(pt, f as Feature<Polygon | MultiPolygon>)) {
+        found = (f.properties?.COUNTYNAME as string) ?? null;
+        break;
+      }
+    }
+    setUserCounty(found);
+    onCountyDetected?.(found);
+  }, [userLocation, counties, onCountyDetected]);
+
+  const features = data.features;
+
+  return (
+    <MapContainer
+      bounds={TAIWAN_BOUNDS}
+      maxBounds={MAP_LIMITS}
+      maxBoundsViscosity={0.85}
+      minZoom={7}
+      maxZoom={12}
+      className="h-full w-full"
+      zoomControl={false}
+      preferCanvas
+    >
+      <TileLayer
+        key={basemap}
+        url={BASEMAPS[basemap].url}
+        attribution={`${BASEMAPS[basemap].attribution} ｜ 資料：中央氣象署`}
+        maxZoom={19}
+        {...BASEMAPS[basemap].options}
+      />
+
+      {radar && (
+        <RadarFrames host={radar.host} frames={radar.frames} idx={radar.idx} />
+      )}
+
+      {typhoons && typhoons.length > 0 && <TyphoonView typhoons={typhoons} />}
+      {typhoons &&
+        typhoons.map((t) => (
+          <TyphoonLayer key={t.id} typhoon={t} activeTime={typhoonTime} />
+        ))}
+
+      {/* 填色連續場（墊在最底層，非互動）*/}
+      {(mode === "temperature" || mode === "precipitation") && (
+        <InterpolatedField features={features} counties={counties} kind={mode} />
+      )}
+
+      {mode === "wind" && <WindParticleLayer features={features} />}
+
+      {showCounties && counties && (
+        <CountyLayer counties={counties} highlight={userCounty} />
+      )}
+
+      {mode === "wind" ? (
+        showWindStations ? (
+          features.map((f) => (
+            <WindStationArrow key={f.properties.stationId} f={f} />
+          ))
+        ) : null
+      ) : mode === "temperature" ? (
+        showTempLabels ? (
+          <TemperatureLayer features={features} />
+        ) : null
+      ) : mode === "weather" ? (
+        <WeatherConditionLayer features={features} />
+      ) : mode === "precipitation" || mode === "radar" || mode === "typhoon" ? null : (
+        features.map((f) => (
+          <StationCircle key={f.properties.stationId} f={f} mode={mode} />
+        ))
+      )}
+
+      {userLocation && (
+        <CircleMarker
+          center={[userLocation.lat, userLocation.lng]}
+          radius={8}
+          pathOptions={{
+            color: "#fff",
+            weight: 2,
+            fillColor: "#10b981",
+            fillOpacity: 1,
+          }}
+        >
+          <Popup>你的位置{userCounty ? `（${userCounty}）` : ""}</Popup>
+        </CircleMarker>
+      )}
+
+      <FlyToUser loc={userLocation} />
+    </MapContainer>
+  );
+}
+
+// 放大到此層級（含）以上顯示各測站細部溫度，否則顯示縣市平均大標籤。
+const TEMP_DETAIL_ZOOM = 10;
+// 縮小到此層級以下（如區域尺度）完全不顯示溫度標籤，避免擁擠。
+const TEMP_LABEL_MIN_ZOOM = 7;
+
+interface CountyTemp {
+  county: string;
+  temp: number;
+  lng: number;
+  lat: number;
+  count: number;
+}
+
+/** 依縣市彙總平均氣溫與代表位置（各站座標平均）。 */
+function aggregateTempByCounty(features: WeatherFeature[]): CountyTemp[] {
+  const acc = new Map<
+    string,
+    { sumT: number; sumLng: number; sumLat: number; n: number }
+  >();
+  for (const f of features) {
+    const t = f.properties.temperature;
+    const c = f.properties.county;
+    if (t === null || !c) continue;
+    const [lng, lat] = f.geometry.coordinates;
+    const e = acc.get(c) ?? { sumT: 0, sumLng: 0, sumLat: 0, n: 0 };
+    e.sumT += t;
+    e.sumLng += lng;
+    e.sumLat += lat;
+    e.n += 1;
+    acc.set(c, e);
+  }
+  return Array.from(acc.entries()).map(([county, e]) => ({
+    county,
+    temp: e.sumT / e.n,
+    lng: e.sumLng / e.n,
+    lat: e.sumLat / e.n,
+    count: e.n,
+  }));
+}
+
+/** 縣市平均氣溫的大標籤 icon。 */
+function bigTempLabelIcon(temp: number): L.DivIcon {
+  const color = temperatureColor(temp);
+  const html = `<div class="temp-label temp-label-big" style="background:${color}">${Math.round(
+    temp
+  )}°</div>`;
+  return L.divIcon({
+    className: "temp-label-wrap",
+    html,
+    iconSize: [48, 30],
+    iconAnchor: [24, 15],
+  });
+}
+
+function BigTempMarker({ agg }: { agg: CountyTemp }) {
+  const icon = useMemo(() => bigTempLabelIcon(agg.temp), [agg.temp]);
+  return (
+    <Marker position={[agg.lat, agg.lng]} icon={icon}>
+      <Popup>
+        <div className="text-sm">
+          <div className="font-bold text-white">{agg.county}</div>
+          <div className="text-gray-300">
+            平均氣溫 {agg.temp.toFixed(1)} °C
+          </div>
+          <div className="text-[11px] text-gray-400">
+            {agg.count} 個測站 · 放大可看各站詳情
+          </div>
+        </div>
+      </Popup>
+    </Marker>
+  );
+}
+
+/** 氣溫圖層：遠看顯示縣市平均大標籤，放大後顯示各測站溫度。 */
+function TemperatureLayer({ features }: { features: WeatherFeature[] }) {
+  const map = useMap();
+  const [zoom, setZoom] = useState(map.getZoom());
+  useMapEvents({
+    zoomend: () => setZoom(map.getZoom()),
+  });
+
+  const aggregates = useMemo(
+    () => aggregateTempByCounty(features),
+    [features]
+  );
+
+  // 縮太小時不顯示標籤（只留填色場）。
+  if (zoom < TEMP_LABEL_MIN_ZOOM) return null;
+
+  if (zoom >= TEMP_DETAIL_ZOOM) {
+    return (
+      <>
+        {features.map((f) => (
+          <TempMarker key={f.properties.stationId} f={f} />
+        ))}
+      </>
+    );
+  }
+  return (
+    <>
+      {aggregates.map((a) => (
+        <BigTempMarker key={a.county} agg={a} />
+      ))}
+    </>
+  );
+}
+
+// ---- 天氣現象（陰晴）圖層：每縣市取多數測站的天氣，以 emoji 示意 ----
+
+/** 將 CWA 天氣現象文字對應到 emoji。順序：雷 > 雨 > 雪 > 霧/靄 > 晴 > 多雲 > 陰。 */
+function weatherEmoji(text: string | null): string {
+  const w = text ?? "";
+  if (/雷/.test(w)) return "⛈️";
+  if (/雨/.test(w)) return "🌧️";
+  if (/雪/.test(w)) return "🌨️";
+  if (/霧|靄/.test(w)) return "🌫️";
+  if (/晴/.test(w)) return "☀️";
+  if (/多雲/.test(w)) return "⛅";
+  if (/陰/.test(w)) return "☁️";
+  return "🌡️";
+}
+
+interface CountyWeather {
+  county: string;
+  emoji: string;
+  label: string; // 最多數的天氣現象文字
+  lng: number;
+  lat: number;
+  count: number;
+}
+
+/** 取 Map 中計數最高的 key。 */
+function topKey(m: Map<string, number>): string {
+  let best = "";
+  let n = -1;
+  m.forEach((v, k) => {
+    if (v > n) {
+      best = k;
+      n = v;
+    }
+  });
+  return best;
+}
+
+/** 依縣市彙總代表天氣：取最常見的天氣現象文字，再由它決定 emoji（兩者保證一致）；
+ *  位置取各站座標平均。 */
+function aggregateWeatherByCounty(features: WeatherFeature[]): CountyWeather[] {
+  const acc = new Map<
+    string,
+    { sumLng: number; sumLat: number; n: number; label: Map<string, number> }
+  >();
+  for (const f of features) {
+    const w = f.properties.weather;
+    const c = f.properties.county;
+    if (!w || !c) continue;
+    const [lng, lat] = f.geometry.coordinates;
+    const e = acc.get(c) ?? { sumLng: 0, sumLat: 0, n: 0, label: new Map() };
+    e.sumLng += lng;
+    e.sumLat += lat;
+    e.n += 1;
+    e.label.set(w, (e.label.get(w) ?? 0) + 1);
+    acc.set(c, e);
+  }
+  return Array.from(acc.entries()).map(([county, e]) => {
+    const label = topKey(e.label);
+    return {
+      county,
+      emoji: weatherEmoji(label),
+      label,
+      lng: e.sumLng / e.n,
+      lat: e.sumLat / e.n,
+      count: e.n,
+    };
+  });
+}
+
+/**
+ * 防止徽章重疊：任兩徽章太近就沿連線對稱推開，以鬆弛法迭代至穩定。
+ * 徽章「寬」約為「高」的 ~3 倍，故用橢圓間距——把經度壓縮 ASPECT 倍後做等向推擠，
+ * 等效於水平所需間距大於垂直，避免寬標籤左右疊住。質心近乎重合（市被縣包住）
+ * 時預設往垂直方向推。通用處理所有擁擠處，不寫死任何縣市名。
+ */
+function deconflictPositions<T extends { lat: number; lng: number }>(
+  items: T[]
+): T[] {
+  const SEP = 0.13; // 壓縮空間中的最小間距（度）
+  const ASPECT = 2.8; // 徽章寬高比，橫向間距需求 ≈ SEP × ASPECT
+  const pts = items.map((it) => ({ item: it, lat: it.lat, sLng: it.lng / ASPECT }));
+  for (let iter = 0; iter < 40; iter++) {
+    let maxPush = 0;
+    for (let a = 0; a < pts.length; a++) {
+      for (let b = a + 1; b < pts.length; b++) {
+        let dLat = pts[b].lat - pts[a].lat;
+        let dLng = pts[b].sLng - pts[a].sLng;
+        let dist = Math.hypot(dLat, dLng);
+        if (dist >= SEP) continue;
+        if (dist < 1e-6) {
+          dLat = 1;
+          dLng = 0;
+          dist = 1;
+        }
+        const push = (SEP - dist) / 2;
+        if (push > maxPush) maxPush = push;
+        const uLat = dLat / dist;
+        const uLng = dLng / dist;
+        pts[a].lat -= uLat * push;
+        pts[a].sLng -= uLng * push;
+        pts[b].lat += uLat * push;
+        pts[b].sLng += uLng * push;
+      }
+    }
+    if (maxPush < 1e-4) break; // 已穩定
+  }
+  return pts.map((p) => ({ ...p.item, lat: p.lat, lng: p.sLng * ASPECT }));
+}
+
+/** 天氣示意徽章 icon（emoji + 縣市名）。 */
+function weatherBadgeIcon(emoji: string, county: string): L.DivIcon {
+  const html =
+    `<div style="display:flex;align-items:center;gap:4px;padding:2px 7px;border-radius:9999px;` +
+    `background:rgba(15,23,42,0.85);border:1px solid rgba(255,255,255,0.18);white-space:nowrap;` +
+    `box-shadow:0 1px 3px rgba(0,0,0,0.45)">` +
+    `<span style="font-size:16px;line-height:1">${emoji}</span>` +
+    `<span style="font-size:12px;color:#e5e7eb">${county}</span></div>`;
+  return L.divIcon({
+    className: "wx-badge-wrap",
+    html,
+    iconSize: [76, 24],
+    iconAnchor: [38, 12],
+  });
+}
+
+function WeatherConditionMarker({ w }: { w: CountyWeather }) {
+  const icon = useMemo(
+    () => weatherBadgeIcon(w.emoji, w.county),
+    [w.emoji, w.county]
+  );
+  return (
+    <Marker position={[w.lat, w.lng]} icon={icon}>
+      <Popup>
+        <div className="text-sm">
+          <div className="font-bold text-white">{w.county}</div>
+          <div className="text-gray-300">
+            {w.emoji} {w.label}
+          </div>
+          <div className="text-[11px] text-gray-400">
+            {w.count} 個測站 · 多數天氣現象
+          </div>
+        </div>
+      </Popup>
+    </Marker>
+  );
+}
+
+/** 天氣圖層：每縣市一個 emoji 徽章。 */
+function WeatherConditionLayer({ features }: { features: WeatherFeature[] }) {
+  const items = useMemo(
+    () => deconflictPositions(aggregateWeatherByCounty(features)),
+    [features]
+  );
+  return (
+    <>
+      {items.map((w) => (
+        <WeatherConditionMarker key={w.county} w={w} />
+      ))}
+    </>
+  );
+}
+
+/** 產生氣溫數字標籤 divIcon：底色依溫度區間，數字白字加深色外框以確保各底色皆可讀。 */
+function tempLabelIcon(temp: number | null): L.DivIcon {
+  const color = temperatureColor(temp);
+  const text = temp === null ? "–" : `${Math.round(temp)}°`;
+  const html = `<div class="temp-label" style="background:${color}">${text}</div>`;
+  return L.divIcon({
+    className: "temp-label-wrap",
+    html,
+    iconSize: [32, 18],
+    iconAnchor: [16, 9],
+  });
+}
+
+/** 氣溫模式：直接在地圖上顯示數字溫度，一眼可讀。 */
+function TempMarker({ f }: { f: WeatherFeature }) {
+  const p = f.properties;
+  const [lng, lat] = f.geometry.coordinates;
+  const icon = useMemo(() => tempLabelIcon(p.temperature), [p.temperature]);
+  return (
+    <Marker position={[lat, lng]} icon={icon}>
+      <Popup>
+        <WeatherStationPopup p={p} />
+      </Popup>
+    </Marker>
+  );
+}
+
+/** 依 mode 決定圓點的顏色與半徑。 */
+function StationCircle({ f, mode }: { f: WeatherFeature; mode: LayerKey }) {
+  const p = f.properties;
+  const [lng, lat] = f.geometry.coordinates;
+
+  let color = "#38bdf8";
+  let radius = 5;
+  let fillOpacity = 0.85;
+
+  if (mode === "temperature") {
+    color = temperatureColor(p.temperature);
+  } else if (mode === "humidity") {
+    color = humidityColor(p.humidity);
+  } else if (mode === "wind") {
+    color = windColor(p.windSpeed);
+    radius = 2.5;
+    fillOpacity = 0.55;
+  } else if (mode === "precipitation") {
+    // 填色場已表達雨量大小，這裡只保留小點作為點擊目標。
+    color = "#e0f2fe";
+    radius = 2.5;
+    fillOpacity = 0.9;
+  } else if (mode === "stations") {
+    color = "#94a3b8";
+    radius = 4;
+  }
+
+  return (
+    <CircleMarker
+      center={[lat, lng]}
+      radius={radius}
+      pathOptions={{
+        color: "rgba(0,0,0,0.35)",
+        weight: 1,
+        fillColor: color,
+        fillOpacity,
+      }}
+    >
+      <Popup>
+        <WeatherStationPopup p={p} />
+      </Popup>
+    </CircleMarker>
+  );
+}
+
+function WindStationArrow({ f }: { f: WeatherFeature }) {
+  const p = f.properties;
+  const [lng, lat] = f.geometry.coordinates;
+  const icon = useMemo(
+    () =>
+      p.windDirection === null
+        ? null
+        : windArrowIcon(p.windDirection, p.windSpeed),
+    [p.windDirection, p.windSpeed]
+  );
+
+  if (!icon) {
+    return <StationCircle f={f} mode="wind" />;
+  }
+
+  return (
+    <Marker position={[lat, lng]} icon={icon}>
+      <Popup>
+        <WeatherStationPopup p={p} />
+      </Popup>
+    </Marker>
+  );
+}
+
+/** 縣市界線圖層：hover 高亮、點擊 zoom、使用者所在縣市持續高亮。 */
+function CountyLayer({
+  counties,
+  highlight,
+}: {
+  counties: FeatureCollection;
+  highlight: string | null;
+}) {
+  const map = useMap();
+  const geoRef = useRef<L.GeoJSON | null>(null);
+
+  const baseStyle = (name?: string): L.PathOptions => ({
+    color: name && name === highlight ? "#fbbf24" : "#64748b",
+    weight: name && name === highlight ? 2.5 : 1,
+    fillColor: name && name === highlight ? "#fbbf24" : "#94a3b8",
+    fillOpacity: name && name === highlight ? 0.25 : 0.05,
+  });
+
+  return (
+    <GeoJSON
+      // highlight 改變時重新套用樣式。
+      key={highlight ?? "none"}
+      ref={geoRef}
+      data={counties}
+      style={(feature) =>
+        baseStyle(feature?.properties?.COUNTYNAME as string | undefined)
+      }
+      onEachFeature={(feature, layer) => {
+        const name = feature.properties?.COUNTYNAME as string | undefined;
+        layer.on({
+          mouseover: (e) => {
+            (e.target as L.Path).setStyle({
+              weight: 2.5,
+              fillOpacity: 0.2,
+              color: "#38bdf8",
+            });
+          },
+          mouseout: (e) => {
+            (e.target as L.Path).setStyle(baseStyle(name));
+          },
+          click: (e) => {
+            map.fitBounds((e.target as L.Polygon).getBounds(), {
+              padding: [20, 20],
+            });
+          },
+        });
+        if (name) layer.bindTooltip(name, { sticky: true });
+      }}
+    />
+  );
+}
