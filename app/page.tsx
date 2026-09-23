@@ -226,26 +226,32 @@ export default function Home() {
       </div>
 
       {/* 載入 / 錯誤覆蓋層 */}
-      {loading && (
-        <div className="absolute inset-0 z-[1000] flex items-center justify-center bg-gray-950/70">
-          <div className="rounded-lg bg-panel px-6 py-4 text-gray-200 shadow-lg">
-            正在取得中央氣象署即時資料…
+      {loading && !meta && (
+        <div className="absolute inset-0 z-[1000] flex items-center justify-center bg-slate-950/80 backdrop-blur-md">
+          <div className="glass-panel flex flex-col items-center gap-3.5 rounded-2xl px-8 py-6 text-slate-200 shadow-2xl border border-white/15">
+            <div className="h-9 w-9 animate-spin rounded-full border-2 border-sky-400 border-t-transparent shadow-[0_0_15px_rgba(56,189,248,0.6)]" />
+            <div className="text-sm font-bold tracking-wide text-white">
+              正在取得中央氣象署即時觀測資料…
+            </div>
+            <div className="text-xs text-slate-400">
+              即時計算 362 站 IDW 連續填色場與 NOAA 粒子風場
+            </div>
           </div>
         </div>
       )}
       {error && !loading && (
-        <div className="absolute inset-0 z-[1000] flex items-center justify-center bg-gray-950/70">
-          <div className="max-w-sm rounded-lg bg-panel px-6 py-5 text-center shadow-lg">
-            <div className="mb-2 text-2xl">⚠️</div>
-            <div className="mb-1 font-semibold text-gray-100">
-              無法載入氣象資料
+        <div className="absolute inset-0 z-[1000] flex items-center justify-center bg-slate-950/80 backdrop-blur-md">
+          <div className="glass-panel max-w-sm rounded-2xl p-6 text-center shadow-2xl border border-rose-500/30">
+            <div className="mb-2 text-3xl">⚠️</div>
+            <div className="mb-1 text-base font-bold text-white">
+              暫時無法連線氣象資料
             </div>
-            <div className="mb-4 text-sm text-gray-400">{error}</div>
+            <div className="mb-4 text-xs text-slate-300">{error}</div>
             <button
               onClick={loadWeather}
-              className="rounded-md bg-sky-600 px-4 py-2 text-sm text-white hover:bg-sky-500"
+              className="rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 px-5 py-2 text-xs font-bold text-white shadow-lg shadow-sky-500/30 transition hover:from-sky-400 hover:to-blue-500"
             >
-              重試
+              重新連線
             </button>
           </div>
         </div>
@@ -326,21 +332,32 @@ export default function Home() {
         />
       )}
 
-      {/* 左下：資料更新時間（桌機） */}
+      {/* 左下：即時連線與資料更新面板（桌機） */}
       {meta && (
-        <div className="absolute bottom-4 left-4 z-[900] hidden rounded-lg bg-panel px-4 py-2 text-xs text-gray-300 shadow-lg backdrop-blur md:block">
-          更新於{" "}
-          <span className="font-semibold text-gray-100">
-            {new Date(meta.updatedAt).toLocaleString("zh-TW", {
-              hour12: false,
-            })}
-          </span>
-          <button
-            onClick={loadWeather}
-            className="ml-3 rounded bg-white/10 px-2 py-0.5 text-gray-200 hover:bg-white/20"
-          >
-            ↻ 重新整理
-          </button>
+        <div className="absolute bottom-4 left-4 z-[900] hidden glass-panel rounded-2xl px-4 py-2.5 text-xs text-slate-300 shadow-2xl md:block">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+              </span>
+              <span className="font-semibold text-slate-100">CWA 觀測網</span>
+            </div>
+            <div className="h-3 w-px bg-white/10" />
+            <div>
+              觀測：
+              <span className="font-mono font-bold text-sky-300 ml-1">
+                {new Date(meta.updatedAt).toLocaleString("zh-TW", { hour12: false })}
+              </span>
+            </div>
+            <button
+              onClick={loadWeather}
+              className="ml-2 flex items-center gap-1.5 rounded-xl bg-white/10 px-3 py-1 font-medium text-slate-200 transition hover:bg-white/20 active:scale-95 border border-white/5"
+            >
+              <span className={loading ? "animate-spin" : ""}>↻</span>
+              <span>重新整理</span>
+            </button>
+          </div>
         </div>
       )}
 

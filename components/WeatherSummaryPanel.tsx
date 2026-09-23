@@ -15,25 +15,48 @@ function fmtTime(iso: string | null): string {
   });
 }
 
-function Stat({
+function StatCard({
+  icon,
   label,
   station,
   value,
   unit,
+  gradient,
+  accentColor,
 }: {
+  icon: string;
   label: string;
   station?: string;
   value?: number | null;
   unit: string;
+  gradient: string;
+  accentColor: string;
 }) {
+  const displayVal = value === null || value === undefined ? "—" : value;
+
   return (
-    <div className="rounded-md bg-white/5 px-3 py-2">
-      <div className="text-[11px] text-gray-400">{label}</div>
-      <div className="text-lg font-semibold text-gray-100">
-        {value === null || value === undefined ? "—" : value}
-        <span className="ml-1 text-xs font-normal text-gray-400">{unit}</span>
+    <div
+      className={`group relative overflow-hidden rounded-xl p-3 border border-white/10 ${gradient} transition-all duration-300 hover:scale-[1.02] hover:border-white/20`}
+    >
+      <div className="flex items-center justify-between text-xs text-slate-300">
+        <span className="font-medium">{label}</span>
+        <span className="text-base">{icon}</span>
       </div>
-      <div className="truncate text-[11px] text-gray-400">{station ?? "—"}</div>
+
+      <div className="mt-2 flex items-baseline gap-1">
+        <span
+          className="font-mono text-2xl font-bold tracking-tight text-white"
+          style={{ textShadow: `0 0 16px ${accentColor}` }}
+        >
+          {displayVal}
+        </span>
+        <span className="text-xs font-semibold text-slate-400">{unit}</span>
+      </div>
+
+      <div className="mt-1 flex items-center gap-1 truncate text-[11px] text-slate-300">
+        <span className="inline-block h-1.5 w-1.5 rounded-full bg-white/40" />
+        <span className="truncate font-medium">{station ?? "—"}</span>
+      </div>
     </div>
   );
 }
@@ -44,77 +67,93 @@ export default function WeatherSummaryPanel({
   meta: WeatherApiResponse;
 }) {
   const s = meta.summary;
+
   return (
-    <div className="pointer-events-auto w-72 rounded-lg bg-panel p-4 shadow-lg backdrop-blur">
-      <div className="flex items-center justify-between">
-        <h1 className="text-base font-bold text-white">台灣即時氣象</h1>
-        <span
-          className={`rounded-full px-2 py-0.5 text-[10px] ${
-            meta.stale
-              ? "bg-amber-500/20 text-amber-300"
-              : meta.cached
-              ? "bg-sky-500/20 text-sky-300"
-              : "bg-emerald-500/20 text-emerald-300"
-          }`}
-        >
-          {meta.stale ? "舊資料" : meta.cached ? "資料庫" : "即時 API"}
-        </span>
+    <div className="pointer-events-auto w-80 glass-panel rounded-2xl p-4 shadow-2xl">
+      {/* 標題與即時連線標籤 */}
+      <div className="flex items-center justify-between border-b border-white/10 pb-3">
+        <div className="flex items-center gap-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-tr from-sky-500 to-indigo-500 text-base shadow-[0_0_12px_rgba(56,189,248,0.4)]">
+            🇹🇼
+          </div>
+          <div>
+            <h1 className="text-base font-bold tracking-tight text-white">
+              台灣即時氣象
+            </h1>
+            <p className="text-[11px] text-slate-400">中央氣象署 CWA 觀測網</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-1 text-[11px] font-semibold text-emerald-300">
+          <span className="relative flex h-2 w-2">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+          </span>
+          <span>{meta.stationCount} 站連線</span>
+        </div>
       </div>
 
-      <div className="mt-1 space-y-0.5 text-[11px] text-gray-400">
-        <div>
-          觀測時間：
-          <span className="text-gray-200">{fmtTime(meta.updatedAt)}</span>
-        </div>
-        <div>
-          資料來源：<span className="text-gray-200">{meta.source}</span>
-        </div>
-        <div>
-          本次讀取：
-          <span className="text-gray-200">
-            {meta.stale
-              ? "資料庫舊資料（API 連線失敗）"
-              : meta.cached
-              ? "資料庫快取（未呼叫 API）"
-              : "即時呼叫 CWA API（已更新資料庫）"}
+      {/* 觀測資訊列表 */}
+      <div className="mt-3 space-y-1.5 rounded-xl bg-slate-900/50 p-2.5 text-[11px] border border-white/5">
+        <div className="flex justify-between items-center text-slate-400">
+          <span>觀測時間</span>
+          <span className="font-mono font-medium text-slate-200">
+            {fmtTime(meta.updatedAt)}
           </span>
         </div>
-        <div>
-          測站數量：
-          <span className="text-gray-200">{meta.stationCount}</span> 站
+        <div className="flex justify-between items-center text-slate-400">
+          <span>資料集來源</span>
+          <span className="font-mono text-sky-300">{meta.source}</span>
+        </div>
+        <div className="flex justify-between items-center text-slate-400">
+          <span>資料狀態</span>
+          <span
+            className={`font-semibold ${
+              meta.stale ? "text-amber-400" : "text-emerald-400"
+            }`}
+          >
+            {meta.stale ? "⚠️ 舊資料回退" : "● 即時更新"}
+          </span>
         </div>
       </div>
 
-      {meta.stale && (
-        <div className="mt-2 rounded-md bg-amber-500/10 px-2 py-1 text-[11px] text-amber-300">
-          ⚠️ 外部 API 暫時無法連線，顯示先前快取資料。
-        </div>
-      )}
-
+      {/* 4 大統計指標卡片 */}
       <div className="mt-3 grid grid-cols-2 gap-2">
-        <Stat
-          label="最高溫"
+        <StatCard
+          icon="🔥"
+          label="全台最高溫"
           station={s.maxTemperature?.stationName}
           value={s.maxTemperature?.value}
           unit="°C"
+          gradient="bg-gradient-to-br from-rose-500/20 via-orange-500/10 to-transparent"
+          accentColor="rgba(244, 63, 94, 0.4)"
         />
-        <Stat
-          label="最低溫"
+        <StatCard
+          icon="❄️"
+          label="全台最低溫"
           station={s.minTemperature?.stationName}
           value={s.minTemperature?.value}
           unit="°C"
+          gradient="bg-gradient-to-br from-cyan-500/20 via-blue-500/10 to-transparent"
+          accentColor="rgba(6, 182, 212, 0.4)"
         />
-        <Stat
-          label="最大雨量"
+        <StatCard
+          icon="🌧️"
+          label="最大累積雨量"
           station={s.maxPrecipitation?.stationName}
           value={s.maxPrecipitation?.value}
           unit="mm"
+          gradient="bg-gradient-to-br from-blue-500/20 via-indigo-500/10 to-transparent"
+          accentColor="rgba(59, 130, 246, 0.4)"
         />
-        <Stat
-          label="最大風速"
+        <StatCard
+          icon="💨"
+          label="最大觀測風速"
           station={s.maxWindSpeed?.stationName}
           value={s.maxWindSpeed?.value}
           unit="m/s"
+          gradient="bg-gradient-to-br from-teal-500/20 via-emerald-500/10 to-transparent"
+          accentColor="rgba(20, 184, 166, 0.4)"
         />
       </div>
     </div>

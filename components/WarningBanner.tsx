@@ -20,13 +20,18 @@ interface WarningsResponse {
   error?: string;
 }
 
-function eventClass(event: string): string {
-  if (/高溫/.test(event)) return "bg-orange-500/25 text-orange-200";
-  if (/雨|豪雨|大雨|降雨/.test(event)) return "bg-sky-500/25 text-sky-200";
-  if (/風/.test(event)) return "bg-teal-500/25 text-teal-200";
-  if (/雷/.test(event)) return "bg-amber-500/25 text-amber-200";
-  if (/濃霧|霧/.test(event)) return "bg-slate-400/25 text-slate-100";
-  return "bg-rose-500/25 text-rose-200";
+function eventBadge(event: string): { bg: string; text: string; border: string } {
+  if (/高溫/.test(event))
+    return { bg: "bg-orange-500/20", text: "text-orange-300", border: "border-orange-500/30" };
+  if (/雨|豪雨|大雨|降雨/.test(event))
+    return { bg: "bg-sky-500/20", text: "text-sky-300", border: "border-sky-500/30" };
+  if (/風|強風/.test(event))
+    return { bg: "bg-teal-500/20", text: "text-teal-300", border: "border-teal-500/30" };
+  if (/雷/.test(event))
+    return { bg: "bg-amber-500/20", text: "text-amber-300", border: "border-amber-500/30" };
+  if (/濃霧|霧/.test(event))
+    return { bg: "bg-slate-500/20", text: "text-slate-300", border: "border-slate-500/30" };
+  return { bg: "bg-rose-500/20", text: "text-rose-300", border: "border-rose-500/30" };
 }
 
 function fmtExpires(iso: string | null): string {
@@ -46,7 +51,8 @@ export default function WarningBanner() {
   const [warnings, setWarnings] = useState<Warning[]>([]);
   const [stale, setStale] = useState(false);
   const [loaded, setLoaded] = useState(false);
-  const [open, setOpen] = useState(true);
+  // 預設為精簡收合模式，點擊可展開看詳細
+  const [open, setOpen] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -57,7 +63,7 @@ export default function WarningBanner() {
         setStale(Boolean(json.stale));
       }
     } catch {
-      // 特報是輔助資訊，抓不到就靜默略過，不影響主地圖。
+      // 輔助特報
     } finally {
       setLoaded(true);
     }
@@ -69,95 +75,107 @@ export default function WarningBanner() {
     return () => clearInterval(timer);
   }, [load]);
 
-  // 尚未載入完成、或收合時不佔版面。
   if (!loaded) return null;
 
   const hasWarnings = warnings.length > 0;
-  // 收合時顯示的事件類型標籤（去重），例如「高溫」「降雨」「強風」。
   const eventTypes = Array.from(
     new Set(warnings.map((w) => w.event).filter(Boolean))
   );
 
   return (
-    <div className="pointer-events-auto w-[min(92vw,560px)] rounded-lg bg-panel shadow-lg backdrop-blur">
-      <div className="flex items-center justify-between gap-2 px-3 py-2">
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-semibold text-white">
-          <span>{hasWarnings ? "⚠️" : "✅"}</span>
-          <span>
-            天氣特報
-            {hasWarnings && (
-              <span className="ml-1 text-amber-300">{warnings.length} 則</span>
+    <div className="pointer-events-auto w-[min(94vw,560px)] glass-panel rounded-2xl shadow-2xl transition-all duration-300 overflow-hidden border border-white/10">
+      {/* 標題欄 */}
+      <div
+        onClick={() => hasWarnings && setOpen((v) => !v)}
+        className={`flex items-center justify-between gap-3 px-3.5 py-2.5 ${
+          hasWarnings ? "cursor-pointer hover:bg-white/[0.04]" : ""
+        }`}
+      >
+        <div className="flex flex-wrap items-center gap-2">
+          {hasWarnings ? (
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
+              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-amber-500" />
+            </span>
+          ) : (
+            <span className="h-2 w-2 rounded-full bg-emerald-400" />
+          )}
+
+          <span className="text-xs font-bold text-white flex items-center gap-1.5">
+            <span>天氣特報</span>
+            {hasWarnings ? (
+              <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] font-semibold text-amber-300 border border-amber-500/30">
+                {warnings.length} 則示警
+              </span>
+            ) : (
+              <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-medium text-emerald-300">
+                全台平靜
+              </span>
             )}
           </span>
+
+          {/* 收合狀態下的特報徽章 */}
           {!open &&
-            eventTypes.slice(0, 4).map((e) => (
-              <span
-                key={e}
-                className={`rounded px-1.5 py-0.5 text-[11px] font-normal ${eventClass(
-                  e
-                )}`}
-              >
-                {e}
-              </span>
-            ))}
-          {!open && eventTypes.length > 4 && (
-            <span className="text-[11px] font-normal text-gray-400">
-              +{eventTypes.length - 4}
-            </span>
-          )}
-          {open && (
-            <span className="text-[11px] font-normal text-gray-400">
-              來源：NCDR CAP 爬蟲 · 中央氣象署
+            eventTypes.slice(0, 3).map((e) => {
+              const b = eventBadge(e);
+              return (
+                <span
+                  key={e}
+                  className={`rounded-lg px-2 py-0.5 text-[10px] font-semibold border ${b.bg} ${b.text} ${b.border}`}
+                >
+                  {e}
+                </span>
+              );
+            })}
+          {!open && eventTypes.length > 3 && (
+            <span className="text-[10px] text-slate-400">
+              +{eventTypes.length - 3}
             </span>
           )}
         </div>
+
         {hasWarnings && (
-          <button
-            onClick={() => setOpen((v) => !v)}
-            className="shrink-0 rounded bg-white/10 px-2 py-1 text-xs text-gray-200 hover:bg-white/20"
-          >
-            {open ? "收合" : "展開"}
+          <button className="flex items-center gap-1 rounded-lg bg-white/10 px-2 py-1 text-[11px] font-medium text-slate-300 hover:bg-white/20 transition">
+            <span>{open ? "收合" : "查看詳情"}</span>
+            <span className="text-[9px]">{open ? "▲" : "▼"}</span>
           </button>
         )}
       </div>
 
-      {!hasWarnings ? (
-        <div className="px-3 pb-2.5 text-[13px] text-gray-400">
-          {stale
-            ? "特報來源暫時無法連線，顯示資料庫中的最後狀態。"
-            : "目前全台無生效中的天氣特報。"}
-        </div>
-      ) : (
-        open && (
-          <div className="max-h-52 space-y-1.5 overflow-y-auto border-t border-white/10 px-3 py-2">
-            {stale && (
-              <div className="rounded bg-amber-500/10 px-2 py-1 text-[12px] text-amber-300">
-                特報來源暫時無法連線，顯示資料庫中的最後狀態。
-              </div>
-            )}
-            {warnings.map((w) => (
-              <div key={w.id} className="rounded-md bg-white/5 px-2.5 py-1.5">
-                <div className="flex items-center gap-2">
+      {/* 展開後的詳細特報列表 */}
+      {open && hasWarnings && (
+        <div className="max-h-60 space-y-2 overflow-y-auto border-t border-white/10 p-3 bg-slate-950/40">
+          {stale && (
+            <div className="rounded-xl bg-amber-500/10 p-2 text-xs text-amber-300 border border-amber-500/20">
+              ⚠️ 特報即時來源連線逾時，顯示快取狀態。
+            </div>
+          )}
+          {warnings.map((w) => {
+            const b = eventBadge(w.event);
+            return (
+              <div
+                key={w.id}
+                className="rounded-xl bg-white/[0.04] p-3 border border-white/5 space-y-1.5"
+              >
+                <div className="flex items-center justify-between gap-2">
                   <span
-                    className={`shrink-0 rounded px-1.5 py-0.5 text-[11px] ${eventClass(
-                      w.event
-                    )}`}
+                    className={`rounded-md px-2 py-0.5 text-[11px] font-bold border ${b.bg} ${b.text} ${b.border}`}
                   >
-                    {w.event || "特報"}
+                    {w.event || "中央氣象署特報"}
                   </span>
                   {w.expires && (
-                    <span className="text-[11px] text-gray-400">
+                    <span className="font-mono text-[10px] text-slate-400">
                       有效至 {fmtExpires(w.expires)}
                     </span>
                   )}
                 </div>
-                <p className="mt-1 text-[13px] leading-relaxed text-gray-200">
+                <p className="text-xs leading-relaxed text-slate-200">
                   {w.headline}
                 </p>
               </div>
-            ))}
-          </div>
-        )
+            );
+          })}
+        </div>
       )}
     </div>
   );
